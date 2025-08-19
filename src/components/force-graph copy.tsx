@@ -1,52 +1,49 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ZoomIn, ZoomOut, RotateCcw, Play, Pause } from "lucide-react";
+import { RotateCcw, Eye, EyeOff } from "lucide-react";
+import * as d3 from "d3";
 
-import ForceGraph2D, { type ForceGraphMethods, type NodeObject, type LinkObject } from "react-force-graph-2d";
-
-interface Node {
+interface Node extends d3.SimulationNodeDatum {
   id: string;
   name: string;
   isStart?: boolean;
   isEnd?: boolean;
-  x?: number;
-  y?: number;
-  fx?: number;
-  fy?: number;
+  group?: number;
+  depth?: number;
 }
 
-interface Link {
-  source: string;
-  target: string;
+interface Link extends d3.SimulationLinkDatum<Node> {
+  source: string | Node;
+  target: string | Node;
   fromPage: string;
   toPage: string;
 }
 
-interface ForceGraphProps {
-  paths: Array<{
-    id: number;
-    path: string[];
-    length: number;
-  }>;
+interface D3ForceGraphProps {
+  paths: string[][];
   startPage: string;
   endPage: string;
 }
 
-export function ForceGraph({ paths, startPage, endPage }: ForceGraphProps) {
-  const fgRef = useRef<ForceGraphMethods<NodeObject<Node>, LinkObject<Link>> | undefined>(undefined);
-  const [graphData, setGraphData] = useState<{ nodes: Node[]; links: Link[] }>({ nodes: [], links: [] });
+export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
   const [hoveredNode, setHoveredNode] = useState<Node | null>(null);
   const [hoveredLink, setHoveredLink] = useState<Link | null>(null);
-  const [isPhysicsEnabled, setIsPhysicsEnabled] = useState(true);
-  const [dimensions, setDimensions] = useState({ width: 800, height: 400 });
+  const [showAllTitles, setShowAllTitles] = useState(false);
+  const [graphData, setGraphData] = useState<{ nodes: Node[]; links: Link[] }>({ nodes: [], links: [] });
+  const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
+  const initialPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
 
-  const getWikipediaUrl = (title: string) => {
-    return `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`;
-  };
+  const getWikipediaUrl = (title: string) =>
+    `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`;
 
+  // ---------------------- GRAPH DATA ----------------------
   useEffect(() => {
     if (paths.length === 0) return;
 
@@ -54,23 +51,25 @@ export function ForceGraph({ paths, startPage, endPage }: ForceGraphProps) {
     const linksSet = new Set<string>();
     const links: Link[] = [];
 
-    // Extract unique nodes and edges from all paths
-    paths.forEach((pathData) => {
-      pathData.path.forEach((page) => {
+    const pathLength = paths[0]?.length || 0;
+
+    paths.forEach((path, pathIndex) => {
+      path.forEach((page, index) => {
         if (!nodesMap.has(page)) {
           nodesMap.set(page, {
             id: page,
             name: page.replace(/_/g, " "),
-            isStart: page === startPage,
-            isEnd: page === endPage,
+            isStart: index === 0,
+            isEnd: index === pathLength - 1,
+            group: pathIndex,
+            depth: index,
           });
         }
       });
 
-      // Create links between consecutive pages in each path
-      for (let i = 0; i < pathData.path.length - 1; i++) {
-        const source = pathData.path[i];
-        const target = pathData.path[i + 1];
+      for (let i = 0; i < path.length - 1; i++) {
+        const source = path[i];
+        const target = path[i + 1];
         const linkKey = `${source}|${target}`;
 
         if (!linksSet.has(linkKey)) {
@@ -91,14 +90,12 @@ export function ForceGraph({ paths, startPage, endPage }: ForceGraphProps) {
     });
   }, [paths, startPage, endPage]);
 
+  // ---------------------- DIMENSIONS ----------------------
   useEffect(() => {
     const handleResize = () => {
-      const container = document.getElementById("force-graph-container");
-      if (container) {
-        setDimensions({
-          width: container.clientWidth,
-          height: 400,
-        });
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        setDimensions({ width: rect.width, height: 500 });
       }
     };
 
@@ -107,151 +104,230 @@ export function ForceGraph({ paths, startPage, endPage }: ForceGraphProps) {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const handleNodeClick = useCallback((node: Node) => {
-    window.open(getWikipediaUrl(node.id), "_blank");
-  }, []);
+  // ---------------------- GRAPH RENDER ----------------------
+  useEffect(() => {
+    if (!svgRef.current || graphData.nodes.length === 0) return;
+    const svg = d3.select(svgRef.current);
+    svg.selectAll("*").remove();
 
-  const handleNodeHover = useCallback((node: Node | null) => {
-    setHoveredNode(node);
-  }, []);
+    const { width, height } = dimensions;
+    const g = svg.append("g");
 
-  const handleLinkHover = useCallback((link: Link | null) => {
-    setHoveredLink(link);
-  }, []);
+    // ---------------------- ZOOM ----------------------
+    const zoom = d3
+      .zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.1, 4])
+      .on("zoom", (event) => {
+        g.attr("transform", event.transform);
+      });
+    svg.call(zoom);
+    zoomRef.current = zoom;
 
-  const handleZoomIn = () => {
-    if (fgRef.current) {
-      fgRef.current.zoom(fgRef.current.zoom() * 1.2);
-    }
-  };
+    // ---------------------- INITIAL POSITIONS ----------------------
+    const maxDepth = Math.max(...graphData.nodes.map((n) => n.depth || 0));
+    const depthGroups = new Map<number, Node[]>();
+    graphData.nodes.forEach((node) => {
+      const depth = node.depth || 0;
+      if (!depthGroups.has(depth)) depthGroups.set(depth, []);
+      depthGroups.get(depth)!.push(node);
+    });
 
-  const handleZoomOut = () => {
-    if (fgRef.current) {
-      fgRef.current.zoom(fgRef.current.zoom() * 0.8);
-    }
-  };
+    initialPositionsRef.current.clear();
+    depthGroups.forEach((nodes, depth) => {
+      const x = (depth / maxDepth) * (width - 200) + 100;
+      const verticalSpacing = Math.max(80, (height - 100) / Math.max(nodes.length - 1, 1));
+      const startY = (height - (nodes.length - 1) * verticalSpacing) / 2;
+      nodes.forEach((node, index) => {
+        const y = startY + index * verticalSpacing;
+        node.x = x;
+        node.y = y;
+        initialPositionsRef.current.set(node.id, { x, y });
+      });
+    });
 
+    // ---------------------- SIMULATION ----------------------
+    const simulation = d3
+      .forceSimulation<Node>(graphData.nodes)
+      .force(
+        "link",
+        d3
+          .forceLink<Node, Link>(graphData.links)
+          .id((d) => d.id)
+          .distance(150)
+          .strength(0.2)
+      )
+      .force("charge", d3.forceManyBody().strength(-50)) // much weaker repulsion
+      .force("x", d3.forceX((d) => ((d.depth || 0) / maxDepth) * (width - 200) + 100).strength(1)) // stronger x pull
+      .force(
+        "y",
+        d3
+          .forceY((d) => {
+            const depth = d.depth || 0;
+            const nodesAtDepth = depthGroups.get(depth) || [];
+            const idx = nodesAtDepth.findIndex((n) => n.id === d.id);
+            const verticalSpacing = Math.max(80, (height - 100) / Math.max(nodesAtDepth.length - 1, 1));
+            const startY = (height - (nodesAtDepth.length - 1) * verticalSpacing) / 2;
+            return startY + idx * verticalSpacing;
+          })
+          .strength(1)
+      ) // stronger y pull
+
+      .force("collision", d3.forceCollide().radius(40));
+
+    simulationRef.current = simulation;
+
+    // ---------------------- LINKS ----------------------
+    const defaultLinkColor = "#64748b";
+    const hoverLinkColor = "#06b6d4";
+
+    const linkGroup = g.append("g").attr("class", "links");
+
+    const link = linkGroup
+      .selectAll(".visible-link")
+      .data(graphData.links)
+      .enter()
+      .append("line")
+      .attr("class", (d, i) => `visible-link link-${i}`)
+      .attr("stroke", defaultLinkColor)
+      .attr("stroke-width", 2)
+      .attr("opacity", 0.95)
+      .style("pointer-events", "none");
+
+    const linkEnd = linkGroup
+      .selectAll(".link-end")
+      .data(graphData.links)
+      .enter()
+      .append("circle")
+      .attr("class", (d, i) => `link-end end-${i}`)
+      .attr("r", 4)
+      .attr("fill", defaultLinkColor)
+      .style("pointer-events", "none");
+
+    const linkHitbox = linkGroup
+      .selectAll(".link-hitbox")
+      .data(graphData.links)
+      .enter()
+      .append("line")
+      .attr("class", "link-hitbox")
+      .attr("stroke", "transparent")
+      .attr("stroke-width", 18)
+      .style("cursor", "pointer")
+      .on("mouseover", (event, d) => {
+        setHoveredLink(d);
+        const i = graphData.links.indexOf(d);
+        d3.select(`.link-${i}`).attr("stroke", hoverLinkColor).attr("stroke-width", 3).attr("opacity", 1);
+        d3.select(`.end-${i}`).attr("fill", hoverLinkColor).attr("r", 6);
+      })
+      .on("mouseout", (event, d) => {
+        setHoveredLink(null);
+        const i = graphData.links.indexOf(d);
+        d3.select(`.link-${i}`).attr("stroke", defaultLinkColor).attr("stroke-width", 2).attr("opacity", 0.95);
+        d3.select(`.end-${i}`).attr("fill", defaultLinkColor).attr("r", 4);
+      })
+      .on("click", (event, d) => {
+        const target = d.target as Node;
+        if (target) window.open(getWikipediaUrl(target.id), "_blank");
+      });
+
+    // ---------------------- NODES ----------------------
+    const node = g
+      .append("g")
+      .selectAll("g")
+      .data(graphData.nodes)
+      .enter()
+      .append("g")
+      .attr("class", "cursor-pointer")
+      .call(
+        d3
+          .drag<SVGGElement, Node>()
+          .on("start", (event, d) => {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+          })
+          .on("drag", (event, d) => {
+            d.fx = event.x;
+            d.fy = event.y;
+          })
+          .on("end", (event, d) => {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+          })
+      )
+      .on("click", (event, d) => window.open(getWikipediaUrl(d.id), "_blank"))
+      .on("mouseover", (event, d) => setHoveredNode(d))
+      .on("mouseout", () => setHoveredNode(null));
+
+    node
+      .append("circle")
+      .attr("r", (d) => (d.isStart || d.isEnd ? 14 : 10))
+      .attr("fill", (d) => (d.isStart || d.isEnd ? "#06b6d4" : "#94a3b8"))
+      .attr("stroke", (d) => (d.isStart || d.isEnd ? "#0891b2" : "#64748b"))
+      .attr("stroke-width", 2);
+
+    node
+      .append("text")
+      .attr("class", "node-label fill-foreground text-xs font-medium pointer-events-none select-none")
+      .attr("text-anchor", "middle")
+      .attr("dy", -20)
+      .style("opacity", (d) => (d.isStart || d.isEnd ? 1 : 0))
+      .text((d) => d.name);
+
+    // ---------------------- SIMULATION TICK ----------------------
+    simulation.on("tick", () => {
+      link
+        .attr("x1", (d) => (d.source as Node).x!)
+        .attr("y1", (d) => (d.source as Node).y!)
+        .attr("x2", (d) => (d.target as Node).x!)
+        .attr("y2", (d) => (d.target as Node).y!);
+
+      linkEnd.attr("cx", (d) => (d.target as Node).x!).attr("cy", (d) => (d.target as Node).y!);
+
+      linkHitbox
+        .attr("x1", (d) => (d.source as Node).x!)
+        .attr("y1", (d) => (d.source as Node).y!)
+        .attr("x2", (d) => (d.target as Node).x!)
+        .attr("y2", (d) => (d.target as Node).y!);
+
+      node.attr("transform", (d) => `translate(${d.x},${d.y})`);
+    });
+
+    return () => simulation.stop();
+  }, [graphData, dimensions]);
+
+  // ---------------------- LABEL VISIBILITY ----------------------
+  useEffect(() => {
+    if (!svgRef.current) return;
+    const svg = d3.select(svgRef.current);
+    svg.selectAll<SVGTextElement, Node>("g > text").style("opacity", (d) => {
+      if (d.isStart || d.isEnd) return 1;
+      return showAllTitles ? 1 : 0;
+    });
+  }, [showAllTitles]);
+
+  // ---------------------- RESET ----------------------
   const handleReset = () => {
-    if (fgRef.current) {
-      fgRef.current.zoomToFit(400);
+    if (simulationRef.current && initialPositionsRef.current.size > 0) {
+      if (zoomRef.current && svgRef.current) {
+        d3.select(svgRef.current).transition().duration(750).call(zoomRef.current.transform, d3.zoomIdentity);
+      }
+
+      graphData.nodes.forEach((node) => {
+        const initialPos = initialPositionsRef.current.get(node.id);
+        if (initialPos) {
+          node.x = initialPos.x;
+          node.y = initialPos.y;
+          node.fx = null;
+          node.fy = null;
+        }
+      });
+
+      simulationRef.current.alpha(0.3).restart();
     }
   };
 
-  const togglePhysics = () => {
-    setIsPhysicsEnabled(!isPhysicsEnabled);
-    if (fgRef.current) {
-      if (isPhysicsEnabled) {
-        fgRef.current.pauseAnimation();
-      } else {
-        fgRef.current.resumeAnimation();
-        // Add jiggle effect by slightly moving nodes
-        graphData.nodes.forEach((node) => {
-          if (node.fx !== undefined) delete node.fx;
-          if (node.fy !== undefined) delete node.fy;
-        });
-      }
-    }
-  };
-
-  const paintNode = useCallback(
-    (node: Node, ctx: CanvasRenderingContext2D, globalScale: number) => {
-      const label = node.name;
-      const fontSize = Math.max(10, 12 / globalScale);
-      ctx.font = `${fontSize}px Inter, sans-serif`;
-
-      // Node styling based on type
-      let nodeColor = "#6b7280"; // default gray
-      let borderColor = "#374151";
-      let textColor = "#ffffff";
-
-      if (node.isStart || node.isEnd) {
-        nodeColor = "#8b5cf6"; // primary purple
-        borderColor = "#7c3aed";
-        textColor = "#ffffff";
-      } else if (hoveredNode?.id === node.id) {
-        nodeColor = "#a855f7"; // lighter purple on hover
-        borderColor = "#9333ea";
-      }
-
-      // Draw node
-      const nodeRadius = node.isStart || node.isEnd ? 8 : 6;
-      ctx.beginPath();
-      ctx.arc(node.x!, node.y!, nodeRadius, 0, 2 * Math.PI);
-      ctx.fillStyle = nodeColor;
-      ctx.fill();
-      ctx.strokeStyle = borderColor;
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      // Draw label (only on hover or for start/end nodes to reduce clutter)
-      if (hoveredNode?.id === node.id || node.isStart || node.isEnd) {
-        const textWidth = ctx.measureText(label).width;
-        const bckgDimensions = [textWidth + 8, fontSize + 4];
-
-        // Background
-        ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
-        ctx.fillRect(
-          node.x! - bckgDimensions[0] / 2,
-          node.y! - nodeRadius - bckgDimensions[1] - 2,
-          bckgDimensions[0],
-          bckgDimensions[1]
-        );
-
-        // Text
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillStyle = textColor;
-        ctx.fillText(label, node.x!, node.y! - nodeRadius - bckgDimensions[1] / 2 - 2);
-      }
-    },
-    [hoveredNode]
-  );
-
-  const paintLink = useCallback(
-    (link: Link, ctx: CanvasRenderingContext2D) => {
-      const source = link.source as any;
-      const target = link.target as any;
-
-      if (!source.x || !source.y || !target.x || !target.y) return;
-
-      ctx.strokeStyle = hoveredLink === link ? "#8b5cf6" : "#4b5563";
-      ctx.lineWidth = hoveredLink === link ? 2 : 1;
-      ctx.globalAlpha = hoveredLink === link ? 1 : 0.6;
-
-      ctx.beginPath();
-      ctx.moveTo(source.x, source.y);
-      ctx.lineTo(target.x, target.y);
-      ctx.stroke();
-
-      // Draw arrow
-      const angle = Math.atan2(target.y - source.y, target.x - source.x);
-      const arrowLength = 8;
-      const arrowAngle = Math.PI / 6;
-
-      ctx.beginPath();
-      ctx.moveTo(
-        target.x - arrowLength * Math.cos(angle - arrowAngle),
-        target.y - arrowLength * Math.sin(angle - arrowAngle)
-      );
-      ctx.lineTo(target.x, target.y);
-      ctx.lineTo(
-        target.x - arrowLength * Math.cos(angle + arrowAngle),
-        target.y - arrowLength * Math.sin(angle + arrowAngle)
-      );
-      ctx.stroke();
-
-      ctx.globalAlpha = 1;
-    },
-    [hoveredLink]
-  );
-
-  if (!ForceGraph2D) {
-    return (
-      <div className="w-full h-[400px] bg-background border rounded-lg flex items-center justify-center">
-        <div className="text-muted-foreground">Loading graph...</div>
-      </div>
-    );
-  }
+  const toggleTitleVisibility = () => setShowAllTitles((v) => !v);
 
   const nodeCount = graphData.nodes.length;
   const edgeCount = graphData.links.length;
@@ -271,55 +347,30 @@ export function ForceGraph({ paths, startPage, endPage }: ForceGraphProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleZoomOut}>
-            <ZoomOut className="w-4 h-4" />
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleZoomIn}>
-            <ZoomIn className="w-4 h-4" />
+          <Button variant="outline" size="sm" onClick={toggleTitleVisibility}>
+            {showAllTitles ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            <span className="ml-1 text-xs">Titles</span>
           </Button>
           <Button variant="outline" size="sm" onClick={handleReset}>
             <RotateCcw className="w-4 h-4" />
-          </Button>
-          <Button variant="outline" size="sm" onClick={togglePhysics}>
-            {isPhysicsEnabled ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+            <span className="ml-1 text-xs">Reset</span>
           </Button>
         </div>
       </div>
 
       <div className="relative">
-        <div id="force-graph-container" className="w-full bg-background border rounded-lg overflow-hidden">
-          <ForceGraph2D
-            ref={fgRef}
-            graphData={graphData}
-            width={dimensions.width}
-            height={dimensions.height}
-            backgroundColor="transparent"
-            nodeCanvasObject={paintNode}
-            linkCanvasObject={paintLink}
-            onNodeClick={handleNodeClick}
-            onNodeHover={handleNodeHover}
-            onLinkHover={handleLinkHover}
-            nodePointerAreaPaint={(node: Node, color: string, ctx: CanvasRenderingContext2D) => {
-              ctx.fillStyle = color;
-              ctx.beginPath();
-              ctx.arc(node.x!, node.y!, node.isStart || node.isEnd ? 8 : 6, 0, 2 * Math.PI);
-              ctx.fill();
-            }}
-            linkDirectionalArrowLength={0} // We draw custom arrows
-            linkDirectionalArrowRelPos={1}
-            d3AlphaDecay={0.02}
-            d3VelocityDecay={0.3}
-            cooldownTicks={nodeCount > 100 ? 50 : 100}
-            enableNodeDrag={true}
-            enableZoomInteraction={true}
-            enablePanInteraction={true}
-          />
+        <div ref={containerRef} className="w-full bg-background border rounded-lg overflow-hidden">
+          <svg ref={svgRef} width={dimensions.width} height={dimensions.height} className="w-full h-full" />
         </div>
 
         {hoveredNode && (
           <div className="absolute top-4 left-4 bg-background/95 backdrop-blur-sm border rounded-lg p-3 shadow-lg max-w-xs z-10">
             <div className="font-medium text-sm">{hoveredNode.name}</div>
-            <div className="text-xs text-muted-foreground mt-1">Click to visit Wikipedia page</div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {hoveredNode.isStart && "Start page • "}
+              {hoveredNode.isEnd && "Goal page • "}
+              Click to visit Wikipedia
+            </div>
           </div>
         )}
 
@@ -333,7 +384,7 @@ export function ForceGraph({ paths, startPage, endPage }: ForceGraphProps) {
         )}
 
         <div className="absolute bottom-4 right-4 bg-background/90 backdrop-blur-sm rounded-lg p-2 border">
-          <div className="text-xs text-muted-foreground">Drag nodes • Scroll to zoom • Click to visit Wikipedia</div>
+          <div className="text-xs text-muted-foreground">Drag nodes • Pan & zoom • Click to visit Wikipedia</div>
         </div>
       </div>
     </div>

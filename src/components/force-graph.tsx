@@ -28,13 +28,143 @@ interface D3ForceGraphProps {
   endPage: string;
 }
 
+type Id = string;
+
+function buildDepthGroups(nodes: { id: Id; depth?: number }[]) {
+  const groups = new Map<number, Id[]>();
+  for (const n of nodes) {
+    const d = n.depth ?? 0;
+    if (!groups.has(d)) groups.set(d, []);
+    groups.get(d)!.push(n.id);
+  }
+  return groups;
+}
+
+// Build neighbor maps for crossing minimization
+function buildAdjacency(links: { source: string | { id: Id }; target: string | { id: Id } }[]) {
+  const out = new Map<Id, Set<Id>>();
+  const inc = new Map<Id, Set<Id>>();
+  for (const l of links) {
+    const s = typeof l.source === "string" ? l.source : l.source.id;
+    const t = typeof l.target === "string" ? l.target : l.target.id;
+    if (!out.has(s)) out.set(s, new Set());
+    if (!inc.has(t)) inc.set(t, new Set());
+    out.get(s)!.add(t);
+    inc.get(t)!.add(s);
+  }
+  return { out, inc };
+}
+
+// Median (or average if even) of neighbor positions
+function median(arr: number[]) {
+  if (arr.length === 0) return Number.NaN;
+  const a = [...arr].sort((x, y) => x - y);
+  const m = Math.floor(a.length / 2);
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+}
+
+// Barycenter/median ordering sweeps to reduce crossings
+function orderColumnsByMedian(
+  depthGroups: Map<number, Id[]>,
+  depthOf: Map<Id, number>,
+  { out, inc }: { out: Map<Id, Set<Id>>; inc: Map<Id, Set<Id>> },
+  sweeps = 2
+) {
+  // Start with alphabetical / existing order
+  const maxDepth = Math.max(...depthGroups.keys());
+  const order = new Map<number, Id[]>();
+  for (const [d, ids] of depthGroups) order.set(d, [...ids]);
+
+  for (let s = 0; s < sweeps; s++) {
+    // top-down (use parents)
+    for (let d = 1; d <= maxDepth; d++) {
+      const prev = order.get(d - 1)!;
+      const indexPrev = new Map(prev.map((id, i) => [id, i]));
+      const cur = order.get(d)!;
+      cur.sort((a, b) => {
+        const ma = median([...(inc.get(a) ?? [])].map((p) => indexPrev.get(p) ?? 0));
+        const mb = median([...(inc.get(b) ?? [])].map((p) => indexPrev.get(p) ?? 0));
+        if (Number.isNaN(ma) && Number.isNaN(mb)) return 0;
+        if (Number.isNaN(ma)) return 1;
+        if (Number.isNaN(mb)) return -1;
+        return ma - mb;
+      });
+      order.set(d, cur);
+    }
+    // bottom-up (use children)
+    for (let d = maxDepth - 1; d >= 0; d--) {
+      const next = order.get(d + 1)!;
+      const indexNext = new Map(next.map((id, i) => [id, i]));
+      const cur = order.get(d)!;
+      cur.sort((a, b) => {
+        const ma = median([...(out.get(a) ?? [])].map((c) => indexNext.get(c) ?? 0));
+        const mb = median([...(out.get(b) ?? [])].map((c) => indexNext.get(c) ?? 0));
+        if (Number.isNaN(ma) && Number.isNaN(mb)) return 0;
+        if (Number.isNaN(ma)) return 1;
+        if (Number.isNaN(mb)) return -1;
+        return ma - mb;
+      });
+      order.set(d, cur);
+    }
+  }
+  return order; // Map<depth, ordered Id[]>
+}
+
+function zoomToFit(
+  svg: SVGSVGElement,
+  zoom: d3.ZoomBehavior<SVGSVGElement, unknown>,
+  nodes: Node[],
+  width: number,
+  height: number,
+  nodeRadius = 0,
+  marginX = 10,
+  marginY = 10
+) {
+  if (!nodes.length) return;
+
+  // compute bounding box of nodes
+  let minX = Infinity,
+    maxX = -Infinity,
+    minY = Infinity,
+    maxY = -Infinity;
+  nodes.forEach((n) => {
+    const x = n.x ?? 0;
+    const y = n.y ?? 0;
+    minX = Math.min(minX, x - nodeRadius);
+    maxX = Math.max(maxX, x + nodeRadius);
+    minY = Math.min(minY, y - nodeRadius);
+    maxY = Math.max(maxY, y + nodeRadius);
+  });
+
+  const graphWidth = Math.max(1, maxX - minX);
+  const graphHeight = Math.max(1, maxY - minY);
+
+  const scaleFitWidth = (width - 2 * marginX) / graphWidth;
+  const scaleFitHeight = (height - 2 * marginY) / graphHeight;
+  const scale = Math.min(1, scaleFitWidth, scaleFitHeight);
+
+  // center graph
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  const tx = width / 2 - scale * cx;
+  const ty = height / 2 - scale * cy;
+
+  const transform = d3.zoomIdentity.translate(tx, ty).scale(scale);
+
+  // apply transform
+  d3.select(svg)
+    .transition()
+    .duration(400)
+    .call(zoom.transform as any, transform);
+}
+
 export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
   const [hoveredNode, setHoveredNode] = useState<Node | null>(null);
   const [hoveredLink, setHoveredLink] = useState<Link | null>(null);
-  const [showAllTitles, setShowAllTitles] = useState(false);
+  const [showAllTitles, setShowAllTitles] = useState(true);
   const [graphData, setGraphData] = useState<{ nodes: Node[]; links: Link[] }>({ nodes: [], links: [] });
   const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
   const initialPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
@@ -95,7 +225,7 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
     const handleResize = () => {
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
-        setDimensions({ width: rect.width, height: 500 });
+        setDimensions({ width: rect.width, height: rect.height });
       }
     };
 
@@ -119,33 +249,91 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
       .scaleExtent([0.1, 4])
       .on("zoom", (event) => {
         g.attr("transform", event.transform);
+
+        const k = event.transform.k;
+
+        // clamp scale factor
+        const minScale = 0.5; // don't let text shrink below 50%
+        const maxScale = 1.85; // don't let text grow beyond 200%
+        const clamped = Math.max(minScale, Math.min(maxScale, 1 / k));
+
+        g.selectAll<SVGTextElement, Node>("text.node-label").attr("transform", `translate(0, -20) scale(${clamped})`);
       });
     svg.call(zoom);
     zoomRef.current = zoom;
 
-    // ---------------------- INITIAL POSITIONS ----------------------
-    const maxDepth = Math.max(...graphData.nodes.map((n) => n.depth || 0));
-    const depthGroups = new Map<number, Node[]>();
-    graphData.nodes.forEach((node) => {
-      const depth = node.depth || 0;
-      if (!depthGroups.has(depth)) depthGroups.set(depth, []);
-      depthGroups.get(depth)!.push(node);
-    });
+    // ---------------------- INITIAL POSITIONS (layered layout) ----------------------
+    const marginX = 80;
+    const marginY = 60;
+    const ROW_SPACING = 100;
 
+    const maxDepth = Math.max(...graphData.nodes.map((n) => n.depth || 0));
+    const idToNode = new Map(graphData.nodes.map((n) => [n.id, n]));
+    const depthOf = new Map(graphData.nodes.map((n) => [n.id, n.depth ?? 0]));
+
+    // group ids by depth
+    const depthGroupsIds = buildDepthGroups(graphData.nodes);
+
+    // reduce crossings: order each column by neighbor medians (2 sweeps)
+    const { out, inc } = buildAdjacency(graphData.links as any);
+    const orderedByDepth = orderColumnsByMedian(depthGroupsIds, depthOf, { out, inc }, 2);
+
+    // vertical spacing: same across all columns
+    const maxCountInAnyDepth = Math.max(...[...orderedByDepth.values()].map((ids) => ids.length));
+    const availableH = Math.max(1, height - 2 * marginY);
+    const rowSpacing = ROW_SPACING; //maxCountInAnyDepth > 1 ? availableH / (maxCountInAnyDepth - 1) : 0;
+
+    // compute column heights (for proportional horizontal gaps)
+    const colHeights = new Map<number, number>();
+    for (const [d, ids] of orderedByDepth) {
+      const h = ids.length > 1 ? (ids.length - 1) * rowSpacing : 0;
+      colHeights.set(d, h);
+    }
+    const maxColH = Math.max(...colHeights.values());
+
+    // assign proportional x per depth
+    const weights: number[] = [];
+    for (let d = 0; d <= maxDepth; d++) {
+      const w = 1 + (maxColH > 0 ? colHeights.get(d)! / maxColH : 0); // 1..2
+      weights.push(w);
+    }
+    const weightSum = weights.reduce((a, b) => a + b, 0);
+    const usableW = maxColH * (width / height); //Math.max(1, width - 2 * marginX);
+    console.log(weights);
+
+    const xAtDepth = new Map<number, number>();
+    let acc = 0;
+    for (let d = 0; d <= maxDepth; d++) {
+      const centerFrac = (acc + weights[d] / 2) / weightSum; // center of the weighted segment
+      const x = marginX + centerFrac * usableW;
+      xAtDepth.set(d, x);
+      acc += weights[d];
+    }
+    console.log(xAtDepth);
+
+    // assign (x, y) neatly
     initialPositionsRef.current.clear();
-    depthGroups.forEach((nodes, depth) => {
-      const x = (depth / maxDepth) * (width - 200) + 100;
-      const verticalSpacing = Math.max(80, (height - 100) / Math.max(nodes.length - 1, 1));
-      const startY = (height - (nodes.length - 1) * verticalSpacing) / 2;
-      nodes.forEach((node, index) => {
-        const y = startY + index * verticalSpacing;
+    for (const [d, ids] of orderedByDepth) {
+      const colH = colHeights.get(d)!;
+      const startY = (height - colH) / 2; // center each column vertically
+      ids.forEach((id, i) => {
+        const node = idToNode.get(id)!;
+        const x = xAtDepth.get(d)!;
+        const y = ids.length > 1 ? startY + i * rowSpacing : height / 2;
         node.x = x;
         node.y = y;
-        initialPositionsRef.current.set(node.id, { x, y });
+        initialPositionsRef.current.set(id, { x, y });
       });
-    });
+    }
+
+    if (svgRef.current && zoomRef.current) {
+      zoomToFit(svgRef.current, zoomRef.current, graphData.nodes, width, height);
+    }
 
     // ---------------------- SIMULATION ----------------------
+    const laneX = (d: any) => xAtDepth.get(d.depth ?? 0)!;
+    const laneY = (d: any) => initialPositionsRef.current.get(d.id)?.y ?? height / 2;
+
     const simulation = d3
       .forceSimulation<Node>(graphData.nodes)
       .force(
@@ -153,32 +341,13 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
         d3
           .forceLink<Node, Link>(graphData.links)
           .id((d) => d.id)
-          .distance(150)
-          .strength(0.2)
+          .distance(200) // short, just to keep links taut
+          .strength(0.025) // very light so it doesn't ruin the lanes
       )
-      .force("charge", d3.forceManyBody().strength(-400))
-      .force(
-        "x",
-        d3
-          .forceX()
-          .x((d) => ((d.depth || 0) / maxDepth) * (width - 200) + 100)
-          .strength(0.9)
-      )
-      .force(
-        "y",
-        d3
-          .forceY()
-          .y((d) => {
-            const depth = d.depth || 0;
-            const nodesAtDepth = depthGroups.get(depth) || [];
-            const idx = nodesAtDepth.findIndex((n) => n.id === d.id);
-            const verticalSpacing = Math.max(80, (height - 100) / Math.max(nodesAtDepth.length - 1, 1));
-            const startY = (height - (nodesAtDepth.length - 1) * verticalSpacing) / 2;
-            return startY + idx * verticalSpacing;
-          })
-          .strength(0.7)
-      )
-      .force("collision", d3.forceCollide().radius(40));
+      // .force("charge", d3.forceManyBody().strength(-30)) // weak repulsion
+      .force("x", d3.forceX<Node>(laneX).strength(1.0)) // strong lane anchoring
+      .force("y", d3.forceY<Node>(laneY).strength(0.6)); // keep near assigned row
+    // .force("collision", d3.forceCollide<Node>().radius(18)); // mild anti-overlap
 
     simulationRef.current = simulation;
 
@@ -274,9 +443,9 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
 
     node
       .append("text")
-      .attr("class", "node-label fill-foreground text-xs font-medium pointer-events-none select-none")
+      .attr("class", "node-label fill-foreground text-xl font-medium select-none") // pointer-events-none
       .attr("text-anchor", "middle")
-      .attr("dy", -20)
+      // .attr("dy", -20)
       .style("opacity", (d) => (d.isStart || d.isEnd ? 1 : 0))
       .text((d) => d.name);
 
@@ -310,15 +479,31 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
       if (d.isStart || d.isEnd) return 1;
       return showAllTitles ? 1 : 0;
     });
-  }, [showAllTitles]);
+  }, [showAllTitles, dimensions]);
 
   // ---------------------- RESET ----------------------
+  //   const handleReset = () => {
+  //     if (simulationRef.current && initialPositionsRef.current.size > 0) {
+  //       if (zoomRef.current && svgRef.current) {
+  //         d3.select(svgRef.current).transition().duration(750).call(zoomRef.current.transform, d3.zoomIdentity);
+  //       }
+
+  //       graphData.nodes.forEach((node) => {
+  //         const initialPos = initialPositionsRef.current.get(node.id);
+  //         if (initialPos) {
+  //           node.x = initialPos.x;
+  //           node.y = initialPos.y;
+  //           node.fx = null;
+  //           node.fy = null;
+  //         }
+  //       });
+
+  //       simulationRef.current.alpha(0.3).restart();
+  //     }
+  //   };
+
   const handleReset = () => {
     if (simulationRef.current && initialPositionsRef.current.size > 0) {
-      if (zoomRef.current && svgRef.current) {
-        d3.select(svgRef.current).transition().duration(750).call(zoomRef.current.transform, d3.zoomIdentity);
-      }
-
       graphData.nodes.forEach((node) => {
         const initialPos = initialPositionsRef.current.get(node.id);
         if (initialPos) {
@@ -328,6 +513,10 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
           node.fy = null;
         }
       });
+
+      if (svgRef.current && zoomRef.current) {
+        zoomToFit(svgRef.current, zoomRef.current, graphData.nodes, dimensions.width, dimensions.height);
+      }
 
       simulationRef.current.alpha(0.3).restart();
     }
@@ -339,7 +528,7 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
   const edgeCount = graphData.links.length;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 flex-1 flex flex-col">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Badge variant="outline" className="text-xs">
@@ -364,9 +553,10 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
         </div>
       </div>
 
-      <div className="relative">
-        <div ref={containerRef} className="w-full bg-background border rounded-lg overflow-hidden">
-          <svg ref={svgRef} width={dimensions.width} height={dimensions.height} className="w-full h-full" />
+      <div className="relative flex-1">
+        <div ref={containerRef} className="w-full h-full bg-background border rounded-lg overflow-hidden">
+          <svg ref={svgRef} className="w-full h-full min-h-[500px]" />
+          {/* width={dimensions.width} height={dimensions.height} */}
         </div>
 
         {hoveredNode && (

@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search, ArrowRight, Zap, Globe, Trophy } from "lucide-react";
+import { Maximize, Minimize } from "lucide-react";
+
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Leaderboard } from "@/components/leaderboard";
 import { PathVisualization } from "@/components/path-visualization";
@@ -27,7 +29,43 @@ export default function WikipediaPathFinder() {
     setTimeout(() => {
       setIsSearching(false);
       setHasResults(true);
-    }, 2000);
+    }, 200);
+  };
+
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  // const pathRef = useRef<PathVisualizationHandle | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const onFsChange = () => {
+      const fsEl = document.fullscreenElement;
+      const entered = !!fsEl;
+      setIsFullscreen(entered);
+      // ask PathVisualization to fit (zoomToFit)
+      // pathRef.current?.fit();
+    };
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    if (el) {
+      el.style.overflow = "auto"; // or "scroll"
+    }
+
+    try {
+      if (!document.fullscreenElement) {
+        // request fullscreen on the wrapper
+        await el.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+      // actual isFullscreen state and fit will be handled by fullscreenchange listener
+    } catch (err) {
+      console.error("Fullscreen toggle failed:", err);
+    }
   };
 
   return (
@@ -126,16 +164,25 @@ export default function WikipediaPathFinder() {
             </Card>
 
             {/* Graph Visualization Area */}
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 font-mono">
-                  <ArrowRight className="w-5 h-5 text-primary" />
-                  Paths Visualization
-                </CardTitle>
-                <CardDescription>All shortest paths between articles will appear here</CardDescription>
+            <Card ref={wrapperRef} className="shadow-sm">
+              <CardHeader className="flex justify-between items-start">
+                <div>
+                  <CardTitle className="flex items-center gap-2 font-mono">
+                    <ArrowRight className="w-5 h-5 text-primary" />
+                    Paths Visualization
+                  </CardTitle>
+                  <CardDescription>All shortest paths between articles will appear here</CardDescription>
+                </div>
+
+                {/* Fullscreen button */}
+                <Button size="sm" variant="outline" onClick={toggleFullscreen}>
+                  {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+                </Button>
               </CardHeader>
-              <CardContent>
+
+              <CardContent className="flex-1 flex flex-col">
                 <PathVisualization
+                  // ref={pathRef}
                   startPage={startPage}
                   endPage={endPage}
                   isSearching={isSearching}

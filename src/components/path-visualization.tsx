@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type RefObject } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 // import { ScrollArea } from "@/components/ui/scroll-area";
 import { ArrowRight, List, Network, ExternalLink } from "lucide-react";
 import { ForceGraph } from "./force-graph";
+import { mockPaths } from "./data";
 
 interface PathVisualizationProps {
   startPage: string;
@@ -70,7 +71,7 @@ export function PathVisualization({ startPage, endPage, isSearching, hasResults 
   );
 
   const renderGraphView = () => (
-    <div className="space-y-4">
+    <div className="space-y-4 flex-1 flex flex-col">
       <div className="text-sm text-muted-foreground text-center">
         Interactive force-directed visualization • Drag nodes and click to visit Wikipedia pages
       </div>
@@ -84,80 +85,6 @@ export function PathVisualization({ startPage, endPage, isSearching, hasResults 
   );
 
   // Mock data for demonstration
-  const mockPaths = [
-    [
-      "Hargrave_Military_Academy",
-      "Christianity",
-      "Georgia_(country)",
-      "List_of_fishes_of_the_Black_Sea",
-      "Grass_goby",
-      "Telosentis_exiguus",
-      "Leptorhynchoididae",
-    ],
-    [
-      "Hargrave_Military_Academy",
-      "BSC_Fürstenfeld_Panthers",
-      "Georgia_(country)",
-      "List_of_fishes_of_the_Black_Sea",
-      "Grass_goby",
-      "Telosentis_exiguus",
-      "Leptorhynchoididae",
-    ],
-    [
-      "Hargrave_Military_Academy",
-      "Theft",
-      "Georgia_(country)",
-      "List_of_fishes_of_the_Black_Sea",
-      "Grass_goby",
-      "Telosentis_exiguus",
-      "Leptorhynchoididae",
-    ],
-    [
-      "Hargrave_Military_Academy",
-      "Lithuania",
-      "Georgia_(country)",
-      "List_of_fishes_of_the_Black_Sea",
-      "Grass_goby",
-      "Telosentis_exiguus",
-      "Leptorhynchoididae",
-    ],
-    [
-      "Hargrave_Military_Academy",
-      "Utsunomiya_Brex",
-      "Georgia_(country)",
-      "List_of_fishes_of_the_Black_Sea",
-      "Grass_goby",
-      "Telosentis_exiguus",
-      "Leptorhynchoididae",
-    ],
-    [
-      "Hargrave_Military_Academy",
-      "Xavier_Musketeers_men's_basketball",
-      "Georgia_(country)",
-      "List_of_fishes_of_the_Black_Sea",
-      "Grass_goby",
-      "Telosentis_exiguus",
-      "Leptorhynchoididae",
-    ],
-    [
-      "Hargrave_Military_Academy",
-      "Orlando_Magic",
-      "Georgia_(country)",
-      "List_of_fishes_of_the_Black_Sea",
-      "Grass_goby",
-      "Telosentis_exiguus",
-      "Leptorhynchoididae",
-    ],
-    [
-      "Hargrave_Military_Academy",
-      "KK_Cedevita_Olimpija",
-      "Georgia_(country)",
-      "List_of_fishes_of_the_Black_Sea",
-      "Grass_goby",
-      "Telosentis_exiguus",
-      "Leptorhynchoididae",
-    ],
-  ];
 
   if (isSearching) {
     return (
@@ -200,7 +127,7 @@ export function PathVisualization({ startPage, endPage, isSearching, hasResults 
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 flex-1 flex-col flex">
       <div className="flex items-center justify-between">
         <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as "list" | "graph")}>
           <TabsList className="grid w-fit grid-cols-2">

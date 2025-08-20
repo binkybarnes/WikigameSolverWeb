@@ -24,8 +24,8 @@ interface Link extends d3.SimulationLinkDatum<Node> {
 
 interface D3ForceGraphProps {
   paths: string[][];
-  startPage: string;
-  endPage: string;
+  // startPage: string;
+  // endPage: string;
 }
 
 type Id = string;
@@ -147,7 +147,7 @@ function zoomToFit(
     .call(zoom.transform as any, transform);
 }
 
-export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
+export function ForceGraph({ paths }: D3ForceGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
@@ -158,6 +158,11 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
   const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
   const initialPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const zoomRef = useRef<d3.ZoomBehavior<HTMLCanvasElement, unknown> | null>(null);
+  const prevGraphDataRef = useRef<{ nodes: Node[]; links: Link[] }>(graphData); // used so toggling titles shouldnt cause zoomtofit
+  const prevDimensionsRef = useRef<{ width: number; height: number }>(dimensions); // however dimensions changing
+
+  const startPage = paths.length > 0 ? paths[0][0] : null;
+  const endPage = paths.length > 0 ? paths[0][paths[0].length - 1] : null;
 
   const getWikipediaUrl = (title: string) =>
     `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`;
@@ -299,18 +304,20 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
         d3
           .forceLink<Node, Link>(graphData.links)
           .id((d) => d.id)
-          .distance(300)
+          .distance(3000)
           .strength(0.01)
       )
       .force("x", d3.forceX<Node>((d) => xAtDepth.get(d.depth ?? 0)!).strength(1.0))
       .force("y", d3.forceY<Node>((d) => initialPositionsRef.current.get(d.id)?.y ?? height / 2).strength(1.0));
     simulationRef.current = simulation;
 
-    let currentTransform = d3.zoomIdentity;
+    // let currentTransform = d3.zoomIdentity;
     let activeHoverNode: Node | null = null;
     let activeHoverLink: Link | null = null;
 
     const drawGraph = () => {
+      const currentTransform = d3.zoomTransform(canvas);
+
       context.save();
       context.clearRect(0, 0, width, height);
       context.translate(currentTransform.x, currentTransform.y);
@@ -360,6 +367,8 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
       // use the underlying native event if present (d3.drag/d3.zoom pass a wrapper)
       const srcEvent = event.sourceEvent || event;
       const [mx, my] = d3.pointer(srcEvent, canvas);
+
+      const currentTransform = d3.zoomTransform(canvas);
       const [wx, wy] = currentTransform.invert([mx, my]);
 
       let foundNode = simulation.find(wx, wy, 30 / currentTransform.k);
@@ -389,14 +398,20 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
         return e.type === "wheel" || (e.type === "mousedown" && !findSubjectNode(e));
       })
       .on("zoom", (event) => {
-        currentTransform = event.transform;
+        // currentTransform = event.transform;
         drawGraph();
       });
     d3.select(canvas).call(zoom);
     zoomRef.current = zoom;
 
-    if (canvasRef.current && zoomRef.current) {
-      zoomToFit(canvasRef.current, zoomRef.current, graphData.nodes, width, height);
+    const hasGraphDataChanged = prevGraphDataRef.current !== graphData;
+    const dimensionsChanged =
+      prevDimensionsRef.current.width !== dimensions.width || prevDimensionsRef.current.height !== dimensions.height;
+
+    if (hasGraphDataChanged || dimensionsChanged) {
+      if (canvasRef.current && zoomRef.current) {
+        zoomToFit(canvasRef.current, zoomRef.current, graphData.nodes, width, height);
+      }
     }
 
     let dragStartPos: [number, number] | null = null;
@@ -417,19 +432,18 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
         canvas.style.cursor = "grabbing";
       })
       .on("drag", (event) => {
-        const src = (event as any).sourceEvent || event;
-        const [mx, my] = d3.pointer(src, canvas);
+        const currentTransform = d3.zoomTransform(canvas);
+        const [mx, my] = d3.pointer(event.sourceEvent, canvas);
         const [wx, wy] = currentTransform.invert([mx, my]);
+
         event.subject.fx = wx;
         event.subject.fy = wy;
 
         if (dragStartPos) {
           const dx = mx - dragStartPos[0];
           const dy = my - dragStartPos[1];
-          if (Math.hypot(dx, dy) > 5) dragMoved = true; // >5px = real drag
+          if (Math.hypot(dx, dy) > 5) dragMoved = true;
         }
-
-        drawGraph();
       })
       .on("end", (event) => {
         if (!event.active) simulation.alphaTarget(0);
@@ -448,6 +462,8 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
       let foundLink: Link | null = null;
       if (!subject) {
         const [mx, my] = d3.pointer(event);
+
+        const currentTransform = d3.zoomTransform(canvas);
         const [wx, wy] = currentTransform.invert([mx, my]);
         let minDistance = Infinity;
         const threshold = 10 / currentTransform.k;
@@ -488,6 +504,7 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
 
       // find link under pointer (same logic as handlePointerMove)
       const [mx, my] = d3.pointer(event, canvas);
+      const currentTransform = d3.zoomTransform(canvas);
       const [wx, wy] = currentTransform.invert([mx, my]);
       let foundLink: Link | null = null;
       let minDistance = Infinity;
@@ -514,6 +531,9 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
 
     canvas.addEventListener("pointermove", handlePointerMove);
     canvas.addEventListener("click", handleClick);
+
+    prevGraphDataRef.current = graphData;
+    prevDimensionsRef.current = dimensions;
 
     return () => {
       simulation.stop();

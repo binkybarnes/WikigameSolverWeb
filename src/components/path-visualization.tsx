@@ -7,16 +7,17 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 // import { ScrollArea } from "@/components/ui/scroll-area";
 import { ArrowRight, List, Network, ExternalLink } from "lucide-react";
 import { ForceGraph } from "./force-graph";
-import { mockPaths } from "./data";
+// import { mockPaths } from "./data";
 
 interface PathVisualizationProps {
   startPage: string;
   endPage: string;
   isSearching: boolean;
   hasResults: boolean;
+  paths: string[][];
 }
 
-export function PathVisualization({ startPage, endPage, isSearching, hasResults }: PathVisualizationProps) {
+export function PathVisualization({ startPage, endPage, isSearching, hasResults, paths }: PathVisualizationProps) {
   const [viewMode, setViewMode] = useState<"list" | "graph">("list");
 
   const getWikipediaUrl = (title: string) => {
@@ -27,16 +28,16 @@ export function PathVisualization({ startPage, endPage, isSearching, hasResults 
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          Found {mockPaths.length} shortest paths (length: {Math.min(...mockPaths.map((p) => p.length))})
+          Found {paths.length} shortest paths (length: {Math.min(...paths.map((p) => p.length))})
         </div>
-        {mockPaths.length > 10 && (
-          <div className="text-xs text-muted-foreground">Showing first 10 of {mockPaths.length} paths</div>
+        {paths.length > 10 && (
+          <div className="text-xs text-muted-foreground">Showing first 10 of {paths.length} paths</div>
         )}
       </div>
 
       {/* <ScrollArea className="h-[350px] pr-4"> */}
       <div className="space-y-3 p-4">
-        {mockPaths.slice(0, 10).map((path, idx) => (
+        {paths.slice(0, 10).map((path, idx) => (
           <Card key={idx} className={`transition-all duration-200 hover:shadow-md`}>
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-2">
@@ -76,10 +77,10 @@ export function PathVisualization({ startPage, endPage, isSearching, hasResults 
         Interactive force-directed visualization • Drag nodes and click to visit Wikipedia pages
       </div>
 
-      <ForceGraph paths={mockPaths} startPage={startPage} endPage={endPage} />
+      <ForceGraph paths={paths} />
 
       <div className="text-xs text-muted-foreground text-center">
-        Showing all {mockPaths.length} paths with optimized layout for performance
+        Showing all {paths.length} paths with optimized layout for performance
       </div>
     </div>
   );

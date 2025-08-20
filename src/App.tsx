@@ -11,6 +11,7 @@ import { Maximize, Minimize } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Leaderboard } from "@/components/leaderboard";
 import { PathVisualization } from "@/components/path-visualization";
+import { output } from "framer-motion/client";
 
 export default function WikipediaPathFinder() {
   const [startPage, setStartPage] = useState("");
@@ -20,17 +21,63 @@ export default function WikipediaPathFinder() {
   const [activeTab, setActiveTab] = useState("finder");
   const scrollPositionRef = useRef(0);
 
+  const [paths, setPaths] = useState<string[][]>([]);
+
+  const API_URL = import.meta.env.VITE_API_URL;
+
+  const searchCache = useRef(new Map<string, any>());
+
+  const outputAsIds = false;
+
   const handleSearch = async () => {
     if (!startPage.trim() || !endPage.trim()) return;
-
     setIsSearching(true);
     setHasResults(false);
 
-    // Simulate search delay
-    setTimeout(() => {
-      setIsSearching(false);
+    // Compute the ETag based on your inputs
+    const etag = `${startPage}-${endPage}-${outputAsIds}`;
+
+    if (searchCache.current.has(etag)) {
+      console.log("Cache hit: using stored result");
+      const cachedResult = searchCache.current.get(etag);
+      console.log("cached data:", cachedResult);
+      setPaths(cachedResult.paths);
+
       setHasResults(true);
-    }, 200);
+      setIsSearching(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/search`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept-Encoding": "gzip, deflate, br",
+        },
+        body: JSON.stringify({
+          start: startPage,
+          end: endPage,
+          output_as_ids: outputAsIds,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      searchCache.current.set(etag, data);
+
+      console.log("Search result:", data);
+      setPaths(data.paths);
+
+      setHasResults(true);
+    } catch (err) {
+      console.error("Search failed:", err);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -193,6 +240,7 @@ export default function WikipediaPathFinder() {
                   endPage={endPage}
                   isSearching={isSearching}
                   hasResults={hasResults}
+                  paths={paths}
                 />
               </CardContent>
             </Card>

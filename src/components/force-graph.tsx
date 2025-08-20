@@ -30,6 +30,7 @@ interface D3ForceGraphProps {
 
 type Id = string;
 
+// Helper functions for layered layout (unchanged)
 function buildDepthGroups(nodes: { id: Id; depth?: number }[]) {
   const groups = new Map<number, Id[]>();
   for (const n of nodes) {
@@ -40,7 +41,6 @@ function buildDepthGroups(nodes: { id: Id; depth?: number }[]) {
   return groups;
 }
 
-// Build neighbor maps for crossing minimization
 function buildAdjacency(links: { source: string | { id: Id }; target: string | { id: Id } }[]) {
   const out = new Map<Id, Set<Id>>();
   const inc = new Map<Id, Set<Id>>();
@@ -55,7 +55,6 @@ function buildAdjacency(links: { source: string | { id: Id }; target: string | {
   return { out, inc };
 }
 
-// Median (or average if even) of neighbor positions
 function median(arr: number[]) {
   if (arr.length === 0) return Number.NaN;
   const a = [...arr].sort((x, y) => x - y);
@@ -63,20 +62,17 @@ function median(arr: number[]) {
   return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
 }
 
-// Barycenter/median ordering sweeps to reduce crossings
 function orderColumnsByMedian(
   depthGroups: Map<number, Id[]>,
   depthOf: Map<Id, number>,
   { out, inc }: { out: Map<Id, Set<Id>>; inc: Map<Id, Set<Id>> },
   sweeps = 2
 ) {
-  // Start with alphabetical / existing order
   const maxDepth = Math.max(...depthGroups.keys());
   const order = new Map<number, Id[]>();
   for (const [d, ids] of depthGroups) order.set(d, [...ids]);
 
   for (let s = 0; s < sweeps; s++) {
-    // top-down (use parents)
     for (let d = 1; d <= maxDepth; d++) {
       const prev = order.get(d - 1)!;
       const indexPrev = new Map(prev.map((id, i) => [id, i]));
@@ -91,7 +87,6 @@ function orderColumnsByMedian(
       });
       order.set(d, cur);
     }
-    // bottom-up (use children)
     for (let d = maxDepth - 1; d >= 0; d--) {
       const next = order.get(d + 1)!;
       const indexNext = new Map(next.map((id, i) => [id, i]));
@@ -107,22 +102,21 @@ function orderColumnsByMedian(
       order.set(d, cur);
     }
   }
-  return order; // Map<depth, ordered Id[]>
+  return order;
 }
 
 function zoomToFit(
-  svg: SVGSVGElement,
-  zoom: d3.ZoomBehavior<SVGSVGElement, unknown>,
+  canvas: HTMLCanvasElement,
+  zoom: d3.ZoomBehavior<HTMLCanvasElement, unknown>,
   nodes: Node[],
   width: number,
   height: number,
-  nodeRadius = 0,
+  nodeRadius = 14,
   marginX = 10,
   marginY = 10
 ) {
   if (!nodes.length) return;
 
-  // compute bounding box of nodes
   let minX = Infinity,
     maxX = -Infinity,
     minY = Infinity,
@@ -138,28 +132,23 @@ function zoomToFit(
 
   const graphWidth = Math.max(1, maxX - minX);
   const graphHeight = Math.max(1, maxY - minY);
-
   const scaleFitWidth = (width - 2 * marginX) / graphWidth;
   const scaleFitHeight = (height - 2 * marginY) / graphHeight;
-  const scale = Math.min(1, scaleFitWidth, scaleFitHeight);
-
-  // center graph
+  const scale = Math.min(1.2, scaleFitWidth, scaleFitHeight);
   const cx = (minX + maxX) / 2;
   const cy = (minY + maxY) / 2;
   const tx = width / 2 - scale * cx;
   const ty = height / 2 - scale * cy;
-
   const transform = d3.zoomIdentity.translate(tx, ty).scale(scale);
 
-  // apply transform
-  d3.select(svg)
+  d3.select(canvas)
     .transition()
     .duration(400)
     .call(zoom.transform as any, transform);
 }
 
 export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
-  const svgRef = useRef<SVGSVGElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
   const [hoveredNode, setHoveredNode] = useState<Node | null>(null);
@@ -168,59 +157,42 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
   const [graphData, setGraphData] = useState<{ nodes: Node[]; links: Link[] }>({ nodes: [], links: [] });
   const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
   const initialPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
-  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  const zoomRef = useRef<d3.ZoomBehavior<HTMLCanvasElement, unknown> | null>(null);
 
   const getWikipediaUrl = (title: string) =>
     `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`;
 
-  // ---------------------- GRAPH DATA ----------------------
   useEffect(() => {
     if (paths.length === 0) return;
-
     const nodesMap = new Map<string, Node>();
     const linksSet = new Set<string>();
     const links: Link[] = [];
-
-    const pathLength = paths[0]?.length || 0;
-
     paths.forEach((path, pathIndex) => {
       path.forEach((page, index) => {
         if (!nodesMap.has(page)) {
           nodesMap.set(page, {
             id: page,
             name: page.replace(/_/g, " "),
-            isStart: index === 0,
-            isEnd: index === pathLength - 1,
+            isStart: page === startPage,
+            isEnd: page === endPage,
             group: pathIndex,
             depth: index,
           });
         }
       });
-
       for (let i = 0; i < path.length - 1; i++) {
         const source = path[i];
         const target = path[i + 1];
         const linkKey = `${source}|${target}`;
-
         if (!linksSet.has(linkKey)) {
           linksSet.add(linkKey);
-          links.push({
-            source,
-            target,
-            fromPage: source.replace(/_/g, " "),
-            toPage: target.replace(/_/g, " "),
-          });
+          links.push({ source, target, fromPage: source.replace(/_/g, " "), toPage: target.replace(/_/g, " ") });
         }
       }
     });
-
-    setGraphData({
-      nodes: Array.from(nodesMap.values()),
-      links,
-    });
+    setGraphData({ nodes: Array.from(nodesMap.values()), links });
   }, [paths, startPage, endPage]);
 
-  // ---------------------- DIMENSIONS ----------------------
   useEffect(() => {
     const handleResize = () => {
       if (containerRef.current) {
@@ -228,111 +200,67 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
         setDimensions({ width: rect.width, height: rect.height });
       }
     };
-
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // ---------------------- GRAPH RENDER ----------------------
   useEffect(() => {
-    if (!svgRef.current || graphData.nodes.length === 0) return;
-    const svg = d3.select(svgRef.current);
-    svg.selectAll("*").remove();
+    if (!canvasRef.current || !containerRef.current || graphData.nodes.length === 0) return;
+
+    const canvas = canvasRef.current;
+    const context = canvas.getContext("2d");
+    if (!context) return;
 
     const { width, height } = dimensions;
-    const g = svg.append("g");
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    context.scale(dpr, dpr);
 
-    // ---------------------- ZOOM ----------------------
-    const zoom = d3
-      .zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.1, 4])
-      .on("zoom", (event) => {
-        g.attr("transform", event.transform);
+    const computedStyle = getComputedStyle(containerRef.current!);
+    const baseFontFamily = computedStyle.fontFamily || "sans-serif";
+    const baseFontSize = parseFloat(computedStyle.fontSize) || 14;
+    const baseFont = `${baseFontSize}px ${baseFontFamily}`;
 
-        const k = event.transform.k;
-
-        // clamp scale factor
-        const minScale = 0.5; // don't let text shrink below 50%
-        const maxScale = 1.85; // don't let text grow beyond 200%
-        const clamped = Math.max(minScale, Math.min(maxScale, 1 / k));
-
-        g.selectAll<SVGTextElement, Node>("text.node-label").attr("transform", `translate(0, -20) scale(${clamped})`);
-      });
-    svg.call(zoom);
-    zoomRef.current = zoom;
-
-    // ---------------------- INITIAL POSITIONS (layered layout) ----------------------
-    const marginX = 80;
-    const marginY = 60;
-    const ROW_SPACING = 100;
-
+    const marginX = 80,
+      marginY = 60,
+      ROW_SPACING = 150;
     const maxDepth = Math.max(...graphData.nodes.map((n) => n.depth || 0));
     const idToNode = new Map(graphData.nodes.map((n) => [n.id, n]));
     const depthOf = new Map(graphData.nodes.map((n) => [n.id, n.depth ?? 0]));
-
-    // group ids by depth
     const depthGroupsIds = buildDepthGroups(graphData.nodes);
-
-    // reduce crossings: order each column by neighbor medians (2 sweeps)
     const { out, inc } = buildAdjacency(graphData.links as any);
     const orderedByDepth = orderColumnsByMedian(depthGroupsIds, depthOf, { out, inc }, 2);
-
-    // vertical spacing: same across all columns
-    const maxCountInAnyDepth = Math.max(...[...orderedByDepth.values()].map((ids) => ids.length));
-    const availableH = Math.max(1, height - 2 * marginY);
-    const rowSpacing = ROW_SPACING; //maxCountInAnyDepth > 1 ? availableH / (maxCountInAnyDepth - 1) : 0;
-
-    // compute column heights (for proportional horizontal gaps)
     const colHeights = new Map<number, number>();
-    for (const [d, ids] of orderedByDepth) {
-      const h = ids.length > 1 ? (ids.length - 1) * rowSpacing : 0;
-      colHeights.set(d, h);
-    }
-    const maxColH = Math.max(...colHeights.values());
-
-    // assign proportional x per depth
+    for (const [d, ids] of orderedByDepth) colHeights.set(d, ids.length > 1 ? (ids.length - 1) * ROW_SPACING : 0);
+    const maxColH = Math.max(0, ...colHeights.values());
     const weights: number[] = [];
-    for (let d = 0; d <= maxDepth; d++) {
-      const w = 1 + (maxColH > 0 ? colHeights.get(d)! / maxColH : 0); // 1..2
-      weights.push(w);
-    }
+    for (let d = 0; d <= maxDepth; d++) weights.push(1 + (maxColH > 0 ? (colHeights.get(d) ?? 0) / maxColH : 0));
     const weightSum = weights.reduce((a, b) => a + b, 0);
-    const usableW = maxColH * (width / height); //Math.max(1, width - 2 * marginX);
-    console.log(weights);
-
+    const usableW = maxColH > 0 ? maxColH * (width / height) : width - 2 * marginX;
     const xAtDepth = new Map<number, number>();
     let acc = 0;
     for (let d = 0; d <= maxDepth; d++) {
-      const centerFrac = (acc + weights[d] / 2) / weightSum; // center of the weighted segment
-      const x = marginX + centerFrac * usableW;
-      xAtDepth.set(d, x);
+      const centerFrac = (acc + weights[d] / 2) / weightSum;
+      xAtDepth.set(d, marginX + centerFrac * usableW);
       acc += weights[d];
     }
-    console.log(xAtDepth);
-
-    // assign (x, y) neatly
     initialPositionsRef.current.clear();
     for (const [d, ids] of orderedByDepth) {
       const colH = colHeights.get(d)!;
-      const startY = (height - colH) / 2; // center each column vertically
+      const startY = (height - colH) / 2;
       ids.forEach((id, i) => {
         const node = idToNode.get(id)!;
         const x = xAtDepth.get(d)!;
-        const y = ids.length > 1 ? startY + i * rowSpacing : height / 2;
+        const y = ids.length > 1 ? startY + i * ROW_SPACING : height / 2;
         node.x = x;
         node.y = y;
         initialPositionsRef.current.set(id, { x, y });
       });
     }
-
-    if (svgRef.current && zoomRef.current) {
-      zoomToFit(svgRef.current, zoomRef.current, graphData.nodes, width, height);
-    }
-
-    // ---------------------- SIMULATION ----------------------
-    const laneX = (d: any) => xAtDepth.get(d.depth ?? 0)!;
-    const laneY = (d: any) => initialPositionsRef.current.get(d.id)?.y ?? height / 2;
 
     const simulation = d3
       .forceSimulation<Node>(graphData.nodes)
@@ -341,166 +269,216 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
         d3
           .forceLink<Node, Link>(graphData.links)
           .id((d) => d.id)
-          .distance(200) // short, just to keep links taut
-          .strength(0.025) // very light so it doesn't ruin the lanes
+          .distance(300)
+          .strength(0.01)
       )
-      // .force("charge", d3.forceManyBody().strength(-30)) // weak repulsion
-      .force("x", d3.forceX<Node>(laneX).strength(1.0)) // strong lane anchoring
-      .force("y", d3.forceY<Node>(laneY).strength(0.6)); // keep near assigned row
-    // .force("collision", d3.forceCollide<Node>().radius(18)); // mild anti-overlap
-
+      .force("x", d3.forceX<Node>((d) => xAtDepth.get(d.depth ?? 0)!).strength(1.0))
+      .force("y", d3.forceY<Node>((d) => initialPositionsRef.current.get(d.id)?.y ?? height / 2).strength(1.0));
     simulationRef.current = simulation;
 
-    // ---------------------- LINKS ----------------------
-    const defaultLinkColor = "#64748b";
-    const hoverLinkColor = "#06b6d4";
+    let currentTransform = d3.zoomIdentity;
+    let activeHoverNode: Node | null = null;
+    let activeHoverLink: Link | null = null;
+    let isDragging = false;
 
-    const linkGroup = g.append("g").attr("class", "links");
+    const drawGraph = () => {
+      context.save();
+      context.clearRect(0, 0, width, height);
+      context.translate(currentTransform.x, currentTransform.y);
+      context.scale(currentTransform.k, currentTransform.k);
 
-    const link = linkGroup
-      .selectAll(".visible-link")
-      .data(graphData.links)
-      .enter()
-      .append("line")
-      .attr("class", (d, i) => `visible-link link-${i}`)
-      .attr("stroke", defaultLinkColor)
-      .attr("stroke-width", 2)
-      .attr("opacity", 0.95)
-      .style("pointer-events", "none");
-
-    const linkEnd = linkGroup
-      .selectAll(".link-end")
-      .data(graphData.links)
-      .enter()
-      .append("circle")
-      .attr("class", (d, i) => `link-end end-${i}`)
-      .attr("r", 4)
-      .attr("fill", defaultLinkColor)
-      .style("pointer-events", "none");
-
-    const linkHitbox = linkGroup
-      .selectAll(".link-hitbox")
-      .data(graphData.links)
-      .enter()
-      .append("line")
-      .attr("class", "link-hitbox")
-      .attr("stroke", "transparent")
-      .attr("stroke-width", 18)
-      .style("cursor", "pointer")
-      .on("mouseover", (event, d) => {
-        setHoveredLink(d);
-        const i = graphData.links.indexOf(d);
-        d3.select(`.link-${i}`).attr("stroke", hoverLinkColor).attr("stroke-width", 3).attr("opacity", 1);
-        d3.select(`.end-${i}`).attr("fill", hoverLinkColor).attr("r", 6);
-      })
-      .on("mouseout", (event, d) => {
-        setHoveredLink(null);
-        const i = graphData.links.indexOf(d);
-        d3.select(`.link-${i}`).attr("stroke", defaultLinkColor).attr("stroke-width", 2).attr("opacity", 0.95);
-        d3.select(`.end-${i}`).attr("fill", defaultLinkColor).attr("r", 4);
-      })
-      .on("click", (event, d) => {
-        const target = d.target as Node;
-        if (target) window.open(getWikipediaUrl(target.id), "_blank");
+      const defaultLinkColor = "#64748b",
+        hoverLinkColor = "#06b6d4";
+      context.globalAlpha = 0.8;
+      graphData.links.forEach((link) => {
+        context.beginPath();
+        context.moveTo((link.source as Node).x!, (link.source as Node).y!);
+        context.lineTo((link.target as Node).x!, (link.target as Node).y!);
+        context.strokeStyle = link === activeHoverLink ? hoverLinkColor : defaultLinkColor;
+        context.lineWidth = link === activeHoverLink ? 2.5 : 1.5;
+        context.stroke();
       });
 
-    // ---------------------- NODES ----------------------
-    const node = g
-      .append("g")
-      .selectAll("g")
-      .data(graphData.nodes)
-      .enter()
-      .append("g")
-      .attr("class", "cursor-pointer")
-      .call(
-        d3
-          .drag<SVGGElement, Node>()
-          .on("start", (event, d) => {
-            if (!event.active) simulation.alphaTarget(0.3).restart();
-            d.fx = d.x;
-            d.fy = d.y;
-          })
-          .on("drag", (event, d) => {
-            d.fx = event.x;
-            d.fy = event.y;
-          })
-          .on("end", (event, d) => {
-            if (!event.active) simulation.alphaTarget(0);
-            d.fx = null;
-            d.fy = null;
-          })
-      )
-      .on("click", (event, d) => window.open(getWikipediaUrl(d.id), "_blank"))
-      .on("mouseover", (event, d) => setHoveredNode(d))
-      .on("mouseout", () => setHoveredNode(null));
+      context.globalAlpha = 1.0;
+      graphData.nodes.forEach((node) => {
+        context.beginPath();
+        const radius = node.isStart || node.isEnd ? 14 : 10;
+        context.arc(node.x!, node.y!, radius, 0, 2 * Math.PI);
+        context.fillStyle = node.isStart || node.isEnd ? "#06b6d4" : "#94a3b8";
+        context.strokeStyle = node === activeHoverNode ? "#0891b2" : node.isStart || node.isEnd ? "#0891b2" : "#64748b";
+        context.lineWidth = node === activeHoverNode ? 3 : 1.5;
+        context.fill();
+        context.stroke();
+      });
 
-    node
-      .append("circle")
-      .attr("r", (d) => (d.isStart || d.isEnd ? 14 : 10))
-      .attr("fill", (d) => (d.isStart || d.isEnd ? "#06b6d4" : "#94a3b8"))
-      .attr("stroke", (d) => (d.isStart || d.isEnd ? "#0891b2" : "#64748b"))
-      .attr("stroke-width", 2);
+      const labelScale = Math.max(0.4, Math.min(1.5, 1 / currentTransform.k));
+      const effectiveFontSize = baseFontSize * labelScale;
+      context.font = `bold ${effectiveFontSize}px ${baseFontFamily}`;
+      context.textAlign = "center";
+      context.textBaseline = "bottom";
+      context.fillStyle = computedStyle.color || "#111827";
+      graphData.nodes.forEach((node) => {
+        if (showAllTitles || node.isStart || node.isEnd || node === activeHoverNode) {
+          const offset = ((node.isStart || node.isEnd ? 14 : 10) + 5) / currentTransform.k;
+          context.fillText(node.name, node.x!, node.y! - offset);
+        }
+      });
+      context.restore();
+    };
+    simulation.on("tick", drawGraph);
 
-    node
-      .append("text")
-      .attr("class", "node-label fill-foreground text-xl font-medium select-none") // pointer-events-none
-      .attr("text-anchor", "middle")
-      // .attr("dy", -20)
-      .style("opacity", (d) => (d.isStart || d.isEnd ? 1 : 0))
-      .text((d) => d.name);
+    const findSubjectNode = (event: d3.D3DragEvent<HTMLCanvasElement, Node, Node> | PointerEvent) => {
+      // use the underlying native event if present (d3.drag/d3.zoom pass a wrapper)
+      const srcEvent = event.sourceEvent || event;
+      const [mx, my] = d3.pointer(srcEvent, canvas);
+      const [wx, wy] = currentTransform.invert([mx, my]);
 
-    // ---------------------- SIMULATION TICK ----------------------
-    simulation.on("tick", () => {
-      link
-        .attr("x1", (d) => (d.source as Node).x!)
-        .attr("y1", (d) => (d.source as Node).y!)
-        .attr("x2", (d) => (d.target as Node).x!)
-        .attr("y2", (d) => (d.target as Node).y!);
+      let foundNode = simulation.find(wx, wy, 30 / currentTransform.k);
+      if (foundNode) return foundNode;
 
-      linkEnd.attr("cx", (d) => (d.target as Node).x!).attr("cy", (d) => (d.target as Node).y!);
+      context.font = baseFont;
+      for (const node of graphData.nodes) {
+        if (showAllTitles || node.isStart || node.isEnd) {
+          const textWidth = context.measureText(node.name).width / 2;
+          const offset = (node.isStart || node.isEnd ? 14 : 10) + 5;
+          const yTop = node.y! - offset - baseFontSize;
+          const yBottom = node.y! - offset;
+          if (wx >= node.x! - textWidth && wx <= node.x! + textWidth && wy >= yTop && wy <= yBottom) {
+            return node;
+          }
+        }
+      }
+      return null;
+    };
 
-      linkHitbox
-        .attr("x1", (d) => (d.source as Node).x!)
-        .attr("y1", (d) => (d.source as Node).y!)
-        .attr("x2", (d) => (d.target as Node).x!)
-        .attr("y2", (d) => (d.target as Node).y!);
+    const zoom = d3
+      .zoom<HTMLCanvasElement, unknown>()
+      .scaleExtent([0.1, 4])
+      .filter((event) => {
+        const e = (event as any).sourceEvent || event;
+        // only allow wheel or mousedown when NOT clicking a subject node
+        return e.type === "wheel" || (e.type === "mousedown" && !findSubjectNode(e));
+      })
+      .on("zoom", (event) => {
+        currentTransform = event.transform;
+        drawGraph();
+      });
+    d3.select(canvas).call(zoom);
+    zoomRef.current = zoom;
 
-      node.attr("transform", (d) => `translate(${d.x},${d.y})`);
-    });
+    if (canvasRef.current && zoomRef.current) {
+      zoomToFit(canvasRef.current, zoomRef.current, graphData.nodes, width, height);
+    }
 
-    return () => simulation.stop();
-  }, [graphData, dimensions]);
+    const drag = d3
+      .drag<HTMLCanvasElement, Node, Node>()
+      .subject(findSubjectNode)
+      .on("start", (event) => {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        event.subject.fx = event.subject.x;
+        event.subject.fy = event.subject.y;
+        isDragging = true;
+        canvas.style.cursor = "grabbing";
+      })
+      .on("drag", (event) => {
+        const src = (event as any).sourceEvent || event;
+        const [mx, my] = d3.pointer(src, canvas);
+        const [wx, wy] = currentTransform.invert([mx, my]);
+        event.subject.fx = wx;
+        event.subject.fy = wy;
+        drawGraph();
+      })
+      .on("end", (event) => {
+        if (!event.active) simulation.alphaTarget(0);
+        event.subject.fx = null;
+        event.subject.fy = null;
+        setTimeout(() => {
+          isDragging = false;
+          canvas.style.cursor = "grab";
+        }, 0);
+      });
+    d3.select(canvas).call(drag);
 
-  // ---------------------- LABEL VISIBILITY ----------------------
-  useEffect(() => {
-    if (!svgRef.current) return;
-    const svg = d3.select(svgRef.current);
-    svg.selectAll<SVGTextElement, Node>("g > text").style("opacity", (d) => {
-      if (d.isStart || d.isEnd) return 1;
-      return showAllTitles ? 1 : 0;
-    });
-  }, [showAllTitles, dimensions]);
+    const handlePointerMove = (event: PointerEvent) => {
+      if (isDragging) return;
+      const subject = findSubjectNode(event);
+      canvas.style.cursor = subject ? "pointer" : "grab";
 
-  // ---------------------- RESET ----------------------
-  //   const handleReset = () => {
-  //     if (simulationRef.current && initialPositionsRef.current.size > 0) {
-  //       if (zoomRef.current && svgRef.current) {
-  //         d3.select(svgRef.current).transition().duration(750).call(zoomRef.current.transform, d3.zoomIdentity);
-  //       }
+      let foundLink: Link | null = null;
+      if (!subject) {
+        const [mx, my] = d3.pointer(event);
+        const [wx, wy] = currentTransform.invert([mx, my]);
+        let minDistance = Infinity;
+        const threshold = 10 / currentTransform.k;
+        for (const link of graphData.links) {
+          const p: [number, number] = [wx, wy];
+          const a: [number, number] = [(link.source as Node).x!, (link.source as Node).y!];
+          const b: [number, number] = [(link.target as Node).x!, (link.target as Node).y!];
+          const l2 = (b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2;
+          if (l2 === 0) continue;
+          let t = ((p[0] - a[0]) * (b[0] - a[0]) + (p[1] - a[1]) * (b[1] - a[1])) / l2;
+          t = Math.max(0, Math.min(1, t));
+          const dist = Math.hypot(p[0] - (a[0] + t * (b[0] - a[0])), p[1] - (a[1] + t * (b[1] - a[1])));
+          if (dist < threshold && dist < minDistance) {
+            minDistance = dist;
+            foundLink = link;
+          }
+        }
+      }
+      if (activeHoverNode !== subject || activeHoverLink !== foundLink) {
+        activeHoverNode = subject;
+        activeHoverLink = foundLink;
+        setHoveredNode(subject);
+        setHoveredLink(foundLink);
+        drawGraph();
+      }
+    };
+    const handleClick = (event: PointerEvent) => {
+      if (isDragging || event.defaultPrevented) return;
 
-  //       graphData.nodes.forEach((node) => {
-  //         const initialPos = initialPositionsRef.current.get(node.id);
-  //         if (initialPos) {
-  //           node.x = initialPos.x;
-  //           node.y = initialPos.y;
-  //           node.fx = null;
-  //           node.fy = null;
-  //         }
-  //       });
+      // compute node & link at the click position (don't trust activeHoverNode)
+      const subject = findSubjectNode(event);
+      if (subject) {
+        window.open(getWikipediaUrl(subject.id), "_blank");
+        return;
+      }
 
-  //       simulationRef.current.alpha(0.3).restart();
-  //     }
-  //   };
+      // find link under pointer (same logic as handlePointerMove)
+      const [mx, my] = d3.pointer(event, canvas);
+      const [wx, wy] = currentTransform.invert([mx, my]);
+      let foundLink: Link | null = null;
+      let minDistance = Infinity;
+      const threshold = 10 / currentTransform.k;
+      for (const link of graphData.links) {
+        const p: [number, number] = [wx, wy];
+        const a: [number, number] = [(link.source as Node).x!, (link.source as Node).y!];
+        const b: [number, number] = [(link.target as Node).x!, (link.target as Node).y!];
+        const l2 = (b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2;
+        if (l2 === 0) continue;
+        let t = ((p[0] - a[0]) * (b[0] - a[0]) + (p[1] - a[1]) * (b[1] - a[1])) / l2;
+        t = Math.max(0, Math.min(1, t));
+        const dist = Math.hypot(p[0] - (a[0] + t * (b[0] - a[0])), p[1] - (a[1] + t * (b[1] - a[1])));
+        if (dist < threshold && dist < minDistance) {
+          minDistance = dist;
+          foundLink = link;
+        }
+      }
+
+      if (foundLink) {
+        window.open(getWikipediaUrl((foundLink.target as Node).id), "_blank");
+      }
+    };
+
+    canvas.addEventListener("pointermove", handlePointerMove);
+    canvas.addEventListener("click", handleClick);
+
+    return () => {
+      simulation.stop();
+      canvas.removeEventListener("pointermove", handlePointerMove);
+      canvas.removeEventListener("click", handleClick);
+      d3.select(canvas).on(".zoom", null).on(".drag", null);
+    };
+  }, [graphData, dimensions, showAllTitles]);
 
   const handleReset = () => {
     if (simulationRef.current && initialPositionsRef.current.size > 0) {
@@ -513,34 +491,28 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
           node.fy = null;
         }
       });
-
-      if (svgRef.current && zoomRef.current) {
-        zoomToFit(svgRef.current, zoomRef.current, graphData.nodes, dimensions.width, dimensions.height);
+      if (canvasRef.current && zoomRef.current) {
+        zoomToFit(canvasRef.current, zoomRef.current, graphData.nodes, dimensions.width, dimensions.height);
       }
-
-      simulationRef.current.alpha(0.3).restart();
+      simulationRef.current.alpha(1).restart();
     }
   };
 
   const toggleTitleVisibility = () => setShowAllTitles((v) => !v);
-
-  const nodeCount = graphData.nodes.length;
-  const edgeCount = graphData.links.length;
 
   return (
     <div className="space-y-4 flex-1 flex flex-col">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Badge variant="outline" className="text-xs">
-            {nodeCount} nodes • {edgeCount} connections
+            {graphData.nodes.length} nodes • {graphData.links.length} connections
           </Badge>
-          {nodeCount > 100 && (
+          {graphData.nodes.length > 100 && (
             <Badge variant="secondary" className="text-xs">
-              Large dataset - optimized rendering
+              Large dataset - rendered with Canvas
             </Badge>
           )}
         </div>
-
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={toggleTitleVisibility}>
             {showAllTitles ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -552,34 +524,28 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
           </Button>
         </div>
       </div>
-
       <div className="relative flex-1">
-        <div ref={containerRef} className="w-full h-full bg-background border rounded-lg overflow-hidden">
-          <svg ref={svgRef} className="w-full h-full min-h-[500px]" />
-          {/* width={dimensions.width} height={dimensions.height} */}
+        <div ref={containerRef} className="w-full h-full bg-background border rounded-lg overflow-hidden touch-none">
+          <canvas ref={canvasRef} className="w-full h-full min-h-[500px]" />
         </div>
-
         {hoveredNode && (
-          <div className="absolute top-4 left-4 bg-background/95 backdrop-blur-sm border rounded-lg p-3 shadow-lg max-w-xs z-10">
+          <div className="absolute top-4 left-4 bg-background/95 backdrop-blur-sm border rounded-lg p-3 shadow-lg max-w-xs z-10 pointer-events-none">
             <div className="font-medium text-sm">{hoveredNode.name}</div>
             <div className="text-xs text-muted-foreground mt-1">
               {hoveredNode.isStart && "Start page • "}
-              {hoveredNode.isEnd && "Goal page • "}
-              Click to visit Wikipedia
+              {hoveredNode.isEnd && "Goal page • "}Click to visit Wikipedia
             </div>
           </div>
         )}
-
-        {hoveredLink && (
-          <div className="absolute top-4 right-4 bg-background/95 backdrop-blur-sm border rounded-lg p-3 shadow-lg max-w-xs z-10">
+        {hoveredLink && !hoveredNode && (
+          <div className="absolute top-4 right-4 bg-background/95 backdrop-blur-sm border rounded-lg p-3 shadow-lg max-w-xs z-10 pointer-events-none">
             <div className="font-medium text-sm">
               {hoveredLink.fromPage} → {hoveredLink.toPage}
             </div>
             <div className="text-xs text-muted-foreground mt-1">Connection between pages</div>
           </div>
         )}
-
-        <div className="absolute bottom-4 right-4 bg-background/90 backdrop-blur-sm rounded-lg p-2 border">
+        <div className="absolute bottom-4 right-4 bg-background/90 backdrop-blur-sm rounded-lg p-2 border pointer-events-none">
           <div className="text-xs text-muted-foreground">Drag nodes • Pan & zoom • Click to visit Wikipedia</div>
         </div>
       </div>

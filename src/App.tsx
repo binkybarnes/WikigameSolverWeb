@@ -19,6 +19,8 @@ export default function WikipediaPathFinder() {
   const [isSearching, setIsSearching] = useState(false);
   const [hasResults, setHasResults] = useState(false);
   const [activeTab, setActiveTab] = useState("finder");
+  const [error, setError] = useState<string | null>(null);
+
   const scrollPositionRef = useRef(0);
 
   const [paths, setPaths] = useState<string[][]>([]);
@@ -30,12 +32,16 @@ export default function WikipediaPathFinder() {
   const outputAsIds = false;
 
   const handleSearch = async () => {
-    if (!startPage.trim() || !endPage.trim()) return;
+    const startPageNormal = startPage.trim().replaceAll(" ", "_");
+    const endPageNormal = endPage.trim().replaceAll(" ", "_");
+
+    if (!startPageNormal || !endPageNormal) return;
     setIsSearching(true);
     setHasResults(false);
+    setError(null);
 
     // Compute the ETag based on your inputs
-    const etag = `${startPage}-${endPage}-${outputAsIds}`;
+    const etag = `${startPageNormal}-${endPageNormal}-${outputAsIds}`;
 
     if (searchCache.current.has(etag)) {
       console.log("Cache hit: using stored result");
@@ -56,14 +62,30 @@ export default function WikipediaPathFinder() {
           "Accept-Encoding": "gzip, deflate, br",
         },
         body: JSON.stringify({
-          start: startPage,
-          end: endPage,
+          start: startPageNormal,
+          end: endPageNormal,
           output_as_ids: outputAsIds,
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error: ${response.status}`);
+        if (response.status === 429) {
+          setError("Rate limit exceeded! Please wait before making another request.");
+          return;
+        }
+
+        try {
+          const data = await response.json();
+          if (data.error) {
+            setError(data.error);
+          } else {
+            setError(`HTTP error: ${response.status}`);
+          }
+        } catch {
+          setError(`HTTP error: ${response.status}`);
+        }
+
+        return;
       }
 
       const data = await response.json();
@@ -213,6 +235,17 @@ export default function WikipediaPathFinder() {
                     </>
                   )}
                 </Button>
+                {error && (
+                  <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                    <div className="flex items-center gap-2 text-destructive">
+                      <div className="w-4 h-4 rounded-full bg-destructive flex items-center justify-center">
+                        <span className="text-destructive-foreground text-xs font-bold">!</span>
+                      </div>
+                      <span className="font-medium">Error</span>
+                    </div>
+                    <p className="text-sm text-destructive/80 mt-1">{error}</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -241,6 +274,7 @@ export default function WikipediaPathFinder() {
                   isSearching={isSearching}
                   hasResults={hasResults}
                   paths={paths}
+                  error={error}
                 />
               </CardContent>
             </Card>

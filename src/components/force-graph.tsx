@@ -194,15 +194,45 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
   }, [paths, startPage, endPage]);
 
   useEffect(() => {
-    const handleResize = () => {
-      if (containerRef.current) {
+    // Handler for the stubborn fullscreen exit - this is our primary fix.
+    const handleFullscreenChange = () => {
+      const isFullscreen = !!document.fullscreenElement;
+
+      if (!isFullscreen && containerRef.current) {
+        // WE ARE EXITING: Force the height back to 500.
+        console.log("Fullscreen exited! Forcing height to 500px.");
+        const rect = containerRef.current.getBoundingClientRect();
+        setDimensions({ width: rect.width, height: 500 });
+      } else if (isFullscreen && containerRef.current) {
+        // WE ARE ENTERING: Let the container fill the screen.
         const rect = containerRef.current.getBoundingClientRect();
         setDimensions({ width: rect.width, height: rect.height });
       }
     };
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+
+    // Observer for all OTHER resizing (e.g., dragging the browser window).
+    const observer = new ResizeObserver((entries) => {
+      // Only run this observer logic if we are NOT in fullscreen.
+      // This lets the 'handleFullscreenChange' be the only authority on fullscreen changes.
+      if (entries[0] && !document.fullscreenElement) {
+        const { width, height } = entries[0].contentRect;
+        setDimensions({ width, height });
+      }
+    });
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    // Cleanup function removes both the listener and the observer.
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      if (containerRef.current) {
+        observer.unobserve(containerRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -279,7 +309,6 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
     let currentTransform = d3.zoomIdentity;
     let activeHoverNode: Node | null = null;
     let activeHoverLink: Link | null = null;
-    let isDragging = false;
 
     const drawGraph = () => {
       context.save();
@@ -311,7 +340,7 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
         context.stroke();
       });
 
-      const labelScale = Math.max(0.4, Math.min(1.5, 1 / currentTransform.k));
+      const labelScale = Math.max(0.4, Math.min(3.5, 1 / currentTransform.k));
       const effectiveFontSize = baseFontSize * labelScale;
       context.font = `bold ${effectiveFontSize}px ${baseFontFamily}`;
       context.textAlign = "center";
@@ -319,7 +348,7 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
       context.fillStyle = computedStyle.color || "#111827";
       graphData.nodes.forEach((node) => {
         if (showAllTitles || node.isStart || node.isEnd || node === activeHoverNode) {
-          const offset = ((node.isStart || node.isEnd ? 14 : 10) + 5) / currentTransform.k;
+          const offset = (node.isStart || node.isEnd ? 14 : 10) + 5;
           context.fillText(node.name, node.x!, node.y! - offset);
         }
       });
@@ -353,7 +382,7 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
 
     const zoom = d3
       .zoom<HTMLCanvasElement, unknown>()
-      .scaleExtent([0.1, 4])
+      .scaleExtent([0.005, 4])
       .filter((event) => {
         const e = (event as any).sourceEvent || event;
         // only allow wheel or mousedown when NOT clicking a subject node
@@ -370,6 +399,9 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
       zoomToFit(canvasRef.current, zoomRef.current, graphData.nodes, width, height);
     }
 
+    let dragStartPos: [number, number] | null = null;
+    let dragMoved = false;
+
     const drag = d3
       .drag<HTMLCanvasElement, Node, Node>()
       .subject(findSubjectNode)
@@ -377,7 +409,11 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
         if (!event.active) simulation.alphaTarget(0.3).restart();
         event.subject.fx = event.subject.x;
         event.subject.fy = event.subject.y;
-        isDragging = true;
+
+        const src = (event as any).sourceEvent || event;
+        dragStartPos = d3.pointer(src, canvas);
+        dragMoved = false;
+
         canvas.style.cursor = "grabbing";
       })
       .on("drag", (event) => {
@@ -386,21 +422,26 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
         const [wx, wy] = currentTransform.invert([mx, my]);
         event.subject.fx = wx;
         event.subject.fy = wy;
+
+        if (dragStartPos) {
+          const dx = mx - dragStartPos[0];
+          const dy = my - dragStartPos[1];
+          if (Math.hypot(dx, dy) > 5) dragMoved = true; // >5px = real drag
+        }
+
         drawGraph();
       })
       .on("end", (event) => {
         if (!event.active) simulation.alphaTarget(0);
         event.subject.fx = null;
         event.subject.fy = null;
-        setTimeout(() => {
-          isDragging = false;
-          canvas.style.cursor = "grab";
-        }, 0);
+        dragStartPos = null;
+
+        canvas.style.cursor = "grab";
       });
     d3.select(canvas).call(drag);
 
     const handlePointerMove = (event: PointerEvent) => {
-      if (isDragging) return;
       const subject = findSubjectNode(event);
       canvas.style.cursor = subject ? "pointer" : "grab";
 
@@ -433,8 +474,10 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
         drawGraph();
       }
     };
+
     const handleClick = (event: PointerEvent) => {
-      if (isDragging || event.defaultPrevented) return;
+      if (event.defaultPrevented) return;
+      if (dragMoved) return;
 
       // compute node & link at the click position (don't trust activeHoverNode)
       const subject = findSubjectNode(event);
@@ -525,8 +568,8 @@ export function ForceGraph({ paths, startPage, endPage }: D3ForceGraphProps) {
         </div>
       </div>
       <div className="relative flex-1">
-        <div ref={containerRef} className="w-full h-full bg-background border rounded-lg overflow-hidden touch-none">
-          <canvas ref={canvasRef} className="w-full h-full min-h-[500px]" />
+        <div ref={containerRef} className="h-full bg-background border rounded-lg overflow-hidden touch-none">
+          <canvas ref={canvasRef} />
         </div>
         {hoveredNode && (
           <div className="absolute top-4 left-4 bg-background/95 backdrop-blur-sm border rounded-lg p-3 shadow-lg max-w-xs z-10 pointer-events-none">

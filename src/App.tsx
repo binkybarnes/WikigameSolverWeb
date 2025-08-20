@@ -18,6 +18,7 @@ export default function WikipediaPathFinder() {
   const [isSearching, setIsSearching] = useState(false);
   const [hasResults, setHasResults] = useState(false);
   const [activeTab, setActiveTab] = useState("finder");
+  const scrollPositionRef = useRef(0);
 
   const handleSearch = async () => {
     if (!startPage.trim() || !endPage.trim()) return;
@@ -38,11 +39,15 @@ export default function WikipediaPathFinder() {
 
   useEffect(() => {
     const onFsChange = () => {
-      const fsEl = document.fullscreenElement;
-      const entered = !!fsEl;
-      setIsFullscreen(entered);
-      // ask PathVisualization to fit (zoomToFit)
-      // pathRef.current?.fit();
+      const isFs = !!document.fullscreenElement;
+      setIsFullscreen(isFs);
+
+      if (!isFs) {
+        // WE ARE EXITING: RESTORE the scroll position
+        setTimeout(() => {
+          window.scrollTo({ top: scrollPositionRef.current, behavior: "auto" });
+        }, 0); // The setTimeout ensures the browser has finished its reflow.
+      }
     };
     document.addEventListener("fullscreenchange", onFsChange);
     return () => document.removeEventListener("fullscreenchange", onFsChange);
@@ -58,6 +63,7 @@ export default function WikipediaPathFinder() {
     try {
       if (!document.fullscreenElement) {
         // request fullscreen on the wrapper
+        scrollPositionRef.current = window.scrollY;
         await el.requestFullscreen();
       } else {
         await document.exitFullscreen();

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RotateCcw, Eye, EyeOff } from "lucide-react";
 import * as d3 from "d3";
+import type { PageInfoMap } from "@/lib/fetch-descriptions";
 
 interface Node extends d3.SimulationNodeDatum {
   id: string;
@@ -23,7 +24,8 @@ interface Link extends d3.SimulationLinkDatum<Node> {
 }
 
 interface D3ForceGraphProps {
-  paths: string[][];
+  paths: number[][];
+  pageInfo: PageInfoMap;
   // startPage: string;
   // endPage: string;
 }
@@ -147,7 +149,7 @@ function zoomToFit(
     .call(zoom.transform as any, transform);
 }
 
-export function ForceGraph({ paths }: D3ForceGraphProps) {
+export function ForceGraph({ paths, pageInfo }: D3ForceGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
@@ -161,8 +163,10 @@ export function ForceGraph({ paths }: D3ForceGraphProps) {
   const prevGraphDataRef = useRef<{ nodes: Node[]; links: Link[] }>(graphData); // used so toggling titles shouldnt cause zoomtofit
   const prevDimensionsRef = useRef<{ width: number; height: number }>(dimensions); // however dimensions changing
 
-  const startPage = paths.length > 0 ? paths[0][0] : null;
-  const endPage = paths.length > 0 ? paths[0][paths[0].length - 1] : null;
+  const startPageId = paths.length > 0 ? paths[0][0] : null;
+  const endPageId = paths.length > 0 ? paths[0][paths[0].length - 1] : null;
+  const startPage = startPageId !== null ? pageInfo[startPageId].title : null;
+  const endPage = endPageId !== null ? pageInfo[endPageId].title : null;
 
   const getWikipediaUrl = (title: string) =>
     `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`;
@@ -173,7 +177,8 @@ export function ForceGraph({ paths }: D3ForceGraphProps) {
     const linksSet = new Set<string>();
     const links: Link[] = [];
     paths.forEach((path, pathIndex) => {
-      path.forEach((page, index) => {
+      path.forEach((pageId, index) => {
+        const page = pageInfo[pageId].title;
         if (!nodesMap.has(page)) {
           nodesMap.set(page, {
             id: page,
@@ -186,8 +191,11 @@ export function ForceGraph({ paths }: D3ForceGraphProps) {
         }
       });
       for (let i = 0; i < path.length - 1; i++) {
-        const source = path[i];
-        const target = path[i + 1];
+        const sourceId = path[i];
+        const targetId = path[i + 1];
+        const source = pageInfo[sourceId].title;
+        const target = pageInfo[targetId].title;
+
         const linkKey = `${source}|${target}`;
         if (!linksSet.has(linkKey)) {
           linksSet.add(linkKey);

@@ -11,7 +11,7 @@ import { Maximize, Minimize } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Leaderboard } from "@/components/leaderboard";
 import { PathVisualization } from "@/components/path-visualization";
-import { output } from "framer-motion/client";
+import { createPageInfoMap, type PageInfoMap } from "./lib/fetch-descriptions";
 
 export default function WikipediaPathFinder() {
   const [startPage, setStartPage] = useState("");
@@ -23,13 +23,27 @@ export default function WikipediaPathFinder() {
 
   const scrollPositionRef = useRef(0);
 
-  const [paths, setPaths] = useState<string[][]>([]);
+  const [paths, setPaths] = useState<number[][]>([]);
+  const [pageInfo, setPageInfo] = useState<PageInfoMap>({});
+
+  // GET DESCRIPTIONS MAP
+  useEffect(() => {
+    const allPageIds = paths.flat();
+    const uniquePageIds = [...new Set(allPageIds)];
+
+    if (uniquePageIds.length > 0) {
+      (async () => {
+        const infoMap = await createPageInfoMap(uniquePageIds);
+        setPageInfo(infoMap);
+      })();
+    }
+  }, [paths]);
 
   const API_URL = import.meta.env.VITE_API_URL;
 
   const searchCache = useRef(new Map<string, any>());
 
-  const outputAsIds = false;
+  const outputAsIds = true;
 
   const handleSearch = async () => {
     const startPageNormal = startPage.trim().replaceAll(" ", "_");
@@ -93,6 +107,20 @@ export default function WikipediaPathFinder() {
 
       console.log("Search result:", data);
       setPaths(data.paths);
+
+      // 🔥 fetch page info right here
+      const allPageIds = data.paths.flat();
+      const uniquePageIds = [...new Set(allPageIds)];
+
+      let infoMap: PageInfoMap = {};
+      if (uniquePageIds.length > 0) {
+        infoMap = await createPageInfoMap(uniquePageIds as number[]);
+        setPageInfo(infoMap);
+      }
+      console.log(infoMap);
+
+      // cache both paths + page info
+      searchCache.current.set(etag, { paths: data.paths, pageInfo: infoMap });
 
       setHasResults(true);
     } catch (err) {
@@ -274,6 +302,7 @@ export default function WikipediaPathFinder() {
                   isSearching={isSearching}
                   hasResults={hasResults}
                   paths={paths}
+                  pageInfo={pageInfo}
                   error={error}
                 />
               </CardContent>

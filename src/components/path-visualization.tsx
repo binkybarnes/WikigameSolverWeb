@@ -1,21 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 // import { ScrollArea } from "@/components/ui/scroll-area";
-import { ArrowRight, List, Network, ExternalLink, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
-import { ForceGraph } from "./force-graph";
+import { ArrowRight, List, Network, ExternalLink, AlertCircle, ChevronLeft, ChevronRight, Grid3X3 } from "lucide-react";
+import { ForceGraph } from "./path-visualization-modes/force-graph";
 import { Button } from "./ui/button";
 // import { mockPaths } from "./data";
+import { type PageInfoMap } from "@/lib/fetch-descriptions";
 
 interface PathVisualizationProps {
   startPage: string;
   endPage: string;
   isSearching: boolean;
   hasResults: boolean;
-  paths: string[][];
+  paths: number[][];
+  pageInfo: PageInfoMap;
   error?: string | null;
 }
 
@@ -25,11 +27,13 @@ export function PathVisualization({
   isSearching,
   hasResults,
   paths,
+  pageInfo,
   error,
 }: PathVisualizationProps) {
-  const [viewMode, setViewMode] = useState<"list" | "graph" | "grid">("list");
+  const [viewMode, setViewMode] = useState<"list" | "graph" | "grid">("grid");
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10; // Increased items per page for more compact list
+  const [showAll, setShowAll] = useState(false);
+  const itemsPerPage = 9; // Increased items per page for more compact list
 
   const getWikipediaUrl = (title: string) => {
     return `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`;
@@ -38,7 +42,118 @@ export function PathVisualization({
   const totalPages = Math.ceil(paths.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const currentPaths = paths.slice(startIndex, endIndex);
+  const currentPaths = showAll ? paths : paths.slice(startIndex, endIndex);
+
+  const memoizedListItems = useMemo(() => {
+    return currentPaths.map((path, index) => {
+      const actualIndex = showAll ? index : startIndex + index;
+
+      return (
+        <Card key={actualIndex} className={`transition-all duration-200 cursor-pointer hover:shadow-md`}>
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between mb-1">
+              <Badge variant="outline" className="text-xs px-2 py-0.5">
+                Path {actualIndex + 1} • {path.length - 1} steps
+              </Badge>
+              <ChevronRight className={`w-3 h-3 transition-transform`} />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              {path.map((pageId, pageIndex) => {
+                const page = pageInfo[pageId];
+                if (!page) return null;
+
+                return (
+                  <div key={pageIndex} className="flex items-center gap-1.5">
+                    <a
+                      href={getWikipediaUrl(page.title)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 bg-muted hover:bg-muted/80 rounded text-xs font-medium transition-colors group"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {page.title.replace(/_/g, " ")}
+                      <ExternalLink className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </a>
+                    {pageIndex < path.length - 1 && <ArrowRight className="w-2.5 h-2.5 text-muted-foreground" />}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      );
+    });
+  }, [currentPaths, showAll, startIndex, pageInfo]);
+
+  const currentGridPaths = showAll ? paths : paths.slice(startIndex, endIndex);
+
+  const memoizedGridItems = useMemo(() => {
+    return currentGridPaths.map((path, pathIndex) => {
+      const actualPathIndex = showAll ? pathIndex : startIndex + pathIndex;
+
+      return (
+        <Card
+          key={actualPathIndex}
+          className="p-0 gap-0 cursor-pointer overflow-hidden hover:shadow-md transition-all duration-200 group"
+        >
+          <div className="p-3 border-b bg-muted/30">
+            <div className="flex items-center justify-between">
+              <Badge variant="outline" className="text-xs">
+                Path {actualPathIndex + 1}
+              </Badge>
+              <span className="text-xs text-muted-foreground">{path.length - 1} steps</span>
+            </div>
+          </div>
+
+          <CardContent className="p-0">
+            <div className="space-y-0">
+              {path.map((pageId, pageIndex) => {
+                const isStartOrEnd = pageIndex === 0 || pageIndex === path.length - 1;
+                const page = pageInfo[pageId];
+                if (!page) return null;
+                const url = getWikipediaUrl(page.title);
+
+                return (
+                  <div
+                    onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+                    key={pageIndex}
+                    className="border-b last:border-b-0"
+                  >
+                    <div className="flex items-center gap-3 p-3 hover:bg-muted/30 transition-colors">
+                      <div className="flex-shrink-0">
+                        <img
+                          src={page.thumbnailUrl || "/vite.svg"}
+                          alt={page.title}
+                          className="w-12 h-8 object-cover rounded"
+                        />
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="font-medium text-sm line-clamp-1">{page.title}</h4>
+                          {isStartOrEnd && (
+                            <Badge className="bg-cyan-500 hover:bg-cyan-600 text-white text-xs px-1.5 py-0">
+                              {pageIndex === 0 ? "Start" : "End"}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground line-clamp-1 mb-1">{page.description}</p>
+                      </div>
+
+                      {pageIndex < path.length - 1 && (
+                        <ArrowRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      );
+    });
+  }, [currentGridPaths, showAll, startIndex, pageInfo]);
 
   const renderPagination = (totalPages: number, currentPage: number, setCurrentPage: (page: number) => void) => {
     if (totalPages <= 1) return null;
@@ -154,50 +269,55 @@ export function PathVisualization({
         <div className="text-sm text-muted-foreground">
           Found {paths.length} shortest paths (length: {paths[0]?.length - 1 || 0})
         </div>
-        <div className="text-xs text-muted-foreground">
-          Showing {startIndex + 1}-{Math.min(endIndex, paths.length)} of {paths.length}
+        <div className="flex items-center gap-3">
+          <Button variant="outline" size="sm" onClick={() => setShowAll(!showAll)} className="text-xs">
+            {showAll ? "Show Pages" : "Show All"}
+          </Button>
+          {!showAll && (
+            <div className="text-xs text-muted-foreground">
+              Showing {startIndex + 1}-{Math.min(endIndex, paths.length)} of {paths.length}
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="space-y-2 min-h-[350px]">
-        {currentPaths.map((path, index) => {
-          const actualIndex = startIndex + index;
-          return (
-            <Card key={actualIndex} className={`transition-all duration-200 cursor-pointer hover:shadow-md`}>
-              <CardContent className="p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <Badge variant="outline" className="text-xs px-2 py-0.5">
-                    Path {actualIndex + 1} • {path.length - 1} steps
-                  </Badge>
-                  <ChevronRight className={`w-3 h-3 transition-transform`} />
-                </div>
+      <div className="space-y-2 min-h-[350px]">{memoizedListItems}</div>
 
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {path.map((page, pageIndex) => (
-                    <div key={pageIndex} className="flex items-center gap-1.5">
-                      <a
-                        href={getWikipediaUrl(page)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-muted hover:bg-muted/80 rounded text-xs font-medium transition-colors group"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {page.replace(/_/g, " ")}
-                        <ExternalLink className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </a>
-                      {pageIndex < path.length - 1 && <ArrowRight className="w-2.5 h-2.5 text-muted-foreground" />}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {renderPagination(totalPages, currentPage, setCurrentPage)}
+      {!showAll && renderPagination(totalPages, currentPage, setCurrentPage)}
     </div>
   );
+
+  const renderGridView = () => {
+    const totalGridPages = Math.ceil(paths.length / itemsPerPage);
+    const gridStartIndex = (currentPage - 1) * itemsPerPage;
+    const gridEndIndex = gridStartIndex + itemsPerPage;
+
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">
+            Found {paths.length} shortest paths (length: {paths[0]?.length - 1 || 0})
+          </div>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={() => setShowAll(!showAll)} className="text-xs">
+              {showAll ? "Show Pages" : "Show All"}
+            </Button>
+            {!showAll && (
+              <div className="text-xs text-muted-foreground">
+                Showing {gridStartIndex + 1}-{Math.min(gridEndIndex, paths.length)} of {paths.length}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-4 min-h-[350px]">
+          {memoizedGridItems}
+        </div>
+
+        {!showAll && renderPagination(totalGridPages, currentPage, setCurrentPage)}
+      </div>
+    );
+  };
 
   const renderGraphView = () => (
     <div className="space-y-4 flex-1 flex flex-col">
@@ -205,7 +325,7 @@ export function PathVisualization({
         Interactive force-directed visualization • Drag nodes and click to visit Wikipedia pages
       </div>
 
-      <ForceGraph paths={paths} />
+      <ForceGraph paths={paths} pageInfo={pageInfo} />
 
       <div className="text-xs text-muted-foreground text-center">
         Showing all {paths.length} paths with optimized layout for performance
@@ -213,7 +333,10 @@ export function PathVisualization({
     </div>
   );
 
-  // Mock data for demonstration
+  const handleViewModeChange = (value: string) => {
+    setViewMode(value as "list" | "graph" | "grid");
+    setCurrentPage(1);
+  };
 
   if (isSearching) {
     return (
@@ -274,8 +397,12 @@ export function PathVisualization({
   return (
     <div className="space-y-4 flex-1 flex-col flex">
       <div className="flex items-center justify-between">
-        <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as "list" | "graph")}>
-          <TabsList className="grid w-fit grid-cols-2">
+        <Tabs value={viewMode} onValueChange={handleViewModeChange}>
+          <TabsList className="grid w-fit grid-cols-3">
+            <TabsTrigger value="grid" className="flex items-center gap-2">
+              <Grid3X3 className="w-4 h-4" />
+              Grid View
+            </TabsTrigger>
             <TabsTrigger value="list" className="flex items-center gap-2">
               <List className="w-4 h-4" />
               List View
@@ -288,7 +415,7 @@ export function PathVisualization({
         </Tabs>
       </div>
 
-      {viewMode === "list" ? renderListView() : renderGraphView()}
+      {viewMode === "list" ? renderListView() : viewMode === "grid" ? renderGridView() : renderGraphView()}
     </div>
   );
 }

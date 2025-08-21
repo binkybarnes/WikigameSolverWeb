@@ -14,6 +14,8 @@ interface Node extends d3.SimulationNodeDatum {
   isEnd?: boolean;
   group?: number;
   depth?: number;
+  isSearchMatch?: boolean;
+  isSearchConnected?: boolean;
 }
 
 interface Link extends d3.SimulationLinkDatum<Node> {
@@ -21,20 +23,18 @@ interface Link extends d3.SimulationLinkDatum<Node> {
   target: string | Node;
   fromPage: string;
   toPage: string;
+  isSearchHighlighted?: boolean;
 }
 
 interface D3ForceGraphProps {
   paths: number[][];
   pageInfo: PageInfoMap;
-  // startPage: string;
-  // endPage: string;
+  searchTerm?: string;
 }
 
-type Id = string;
-
 // Helper functions for layered layout (unchanged)
-function buildDepthGroups(nodes: { id: Id; depth?: number }[]) {
-  const groups = new Map<number, Id[]>();
+function buildDepthGroups(nodes: { id: string; depth?: number }[]) {
+  const groups = new Map<number, string[]>();
   for (const n of nodes) {
     const d = n.depth ?? 0;
     if (!groups.has(d)) groups.set(d, []);
@@ -43,9 +43,9 @@ function buildDepthGroups(nodes: { id: Id; depth?: number }[]) {
   return groups;
 }
 
-function buildAdjacency(links: { source: string | { id: Id }; target: string | { id: Id } }[]) {
-  const out = new Map<Id, Set<Id>>();
-  const inc = new Map<Id, Set<Id>>();
+function buildAdjacency(links: { source: string | { id: string }; target: string | { id: string } }[]) {
+  const out = new Map<string, Set<string>>();
+  const inc = new Map<string, Set<string>>();
   for (const l of links) {
     const s = typeof l.source === "string" ? l.source : l.source.id;
     const t = typeof l.target === "string" ? l.target : l.target.id;
@@ -65,13 +65,13 @@ function median(arr: number[]) {
 }
 
 function orderColumnsByMedian(
-  depthGroups: Map<number, Id[]>,
-  depthOf: Map<Id, number>,
-  { out, inc }: { out: Map<Id, Set<Id>>; inc: Map<Id, Set<Id>> },
+  depthGroups: Map<number, string[]>,
+  depthOf: Map<string, number>,
+  { out, inc }: { out: Map<string, Set<string>>; inc: Map<string, Set<string>> },
   sweeps = 2
 ) {
   const maxDepth = Math.max(...depthGroups.keys());
-  const order = new Map<number, Id[]>();
+  const order = new Map<number, string[]>();
   for (const [d, ids] of depthGroups) order.set(d, [...ids]);
 
   for (let s = 0; s < sweeps; s++) {
@@ -149,7 +149,7 @@ function zoomToFit(
     .call(zoom.transform as any, transform);
 }
 
-export function ForceGraph({ paths, pageInfo }: D3ForceGraphProps) {
+export function ForceGraph({ paths, pageInfo, searchTerm = "" }: D3ForceGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
@@ -160,13 +160,17 @@ export function ForceGraph({ paths, pageInfo }: D3ForceGraphProps) {
   const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
   const initialPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const zoomRef = useRef<d3.ZoomBehavior<HTMLCanvasElement, unknown> | null>(null);
-  const prevGraphDataRef = useRef<{ nodes: Node[]; links: Link[] }>(graphData); // used so toggling titles shouldnt cause zoomtofit
+  const prevStructuralDataRef = useRef<{ nodeCount: number; linkCount: number; pathsLength: number }>({
+    nodeCount: 0,
+    linkCount: 0,
+    pathsLength: 0,
+  }); // used so toggling titles or filter graph shouldnt cause zoomtofit
   const prevDimensionsRef = useRef<{ width: number; height: number }>(dimensions); // however dimensions changing
 
   const startPageId = paths.length > 0 ? paths[0][0] : null;
   const endPageId = paths.length > 0 ? paths[0][paths[0].length - 1] : null;
-  const startPage = startPageId !== null ? pageInfo[startPageId].title : null;
-  const endPage = endPageId !== null ? pageInfo[endPageId].title : null;
+  const startPage = startPageId ? pageInfo[startPageId]?.title ?? null : null;
+  const endPage = endPageId ? pageInfo[endPageId]?.title ?? null : null;
 
   const getWikipediaUrl = (title: string) =>
     `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`;
@@ -203,8 +207,50 @@ export function ForceGraph({ paths, pageInfo }: D3ForceGraphProps) {
         }
       }
     });
+
+    const searchLower = searchTerm.toLowerCase().trim();
+    const searchMatchNodes = new Set<string>();
+
+    if (searchLower) {
+      nodesMap.forEach((node, id) => {
+        if (node.name.toLowerCase().includes(searchLower)) {
+          node.isSearchMatch = true;
+          searchMatchNodes.add(id);
+        } else {
+          node.isSearchMatch = false;
+        }
+      });
+
+      nodesMap.forEach((node, id) => {
+        if (!node.isSearchMatch) {
+          const isConnected = links.some((link) => {
+            const sourceId = typeof link.source === "string" ? link.source : link.source.id;
+            const targetId = typeof link.target === "string" ? link.target : link.target.id;
+            return (
+              (searchMatchNodes.has(sourceId) && targetId === id) || (searchMatchNodes.has(targetId) && sourceId === id)
+            );
+          });
+          node.isSearchConnected = isConnected;
+        }
+      });
+
+      links.forEach((link) => {
+        const sourceId = typeof link.source === "string" ? link.source : link.source.id;
+        const targetId = typeof link.target === "string" ? link.target : link.target.id;
+        link.isSearchHighlighted = searchMatchNodes.has(sourceId) || searchMatchNodes.has(targetId);
+      });
+    } else {
+      nodesMap.forEach((node) => {
+        node.isSearchMatch = false;
+        node.isSearchConnected = false;
+      });
+      links.forEach((link) => {
+        link.isSearchHighlighted = false;
+      });
+    }
+
     setGraphData({ nodes: Array.from(nodesMap.values()), links });
-  }, [paths, startPage, endPage]);
+  }, [paths, startPage, endPage, searchTerm]);
 
   useEffect(() => {
     // Handler for the stubborn fullscreen exit - this is our primary fix.
@@ -332,15 +378,42 @@ export function ForceGraph({ paths, pageInfo }: D3ForceGraphProps) {
       context.scale(currentTransform.k, currentTransform.k);
 
       const defaultLinkColor = "#64748b",
-        hoverLinkColor = "#06b6d4";
+        hoverLinkColor = "#06b6d4",
+        searchHighlightLinkColor = "#f59e0b",
+        dimmedLinkColor = "#94a3b8";
+
+      const hasSearchTerm = searchTerm.trim().length > 0;
+
       context.globalAlpha = 0.8;
       graphData.links.forEach((link) => {
         context.beginPath();
         context.moveTo((link.source as Node).x!, (link.source as Node).y!);
         context.lineTo((link.target as Node).x!, (link.target as Node).y!);
-        context.strokeStyle = link === activeHoverLink ? hoverLinkColor : defaultLinkColor;
-        context.lineWidth = link === activeHoverLink ? 2.5 : 1.5;
+
+        let strokeStyle = defaultLinkColor;
+        let lineWidth = 1.5;
+
+        if (link === activeHoverLink) {
+          strokeStyle = hoverLinkColor;
+          lineWidth = 2.5;
+        } else if (hasSearchTerm) {
+          if (link.isSearchHighlighted) {
+            strokeStyle = searchHighlightLinkColor;
+            lineWidth = 2;
+          } else {
+            strokeStyle = dimmedLinkColor;
+            context.globalAlpha = 0.3;
+          }
+        }
+
+        context.strokeStyle = strokeStyle;
+        context.lineWidth = lineWidth;
+
         context.stroke();
+
+        if (hasSearchTerm && !link.isSearchHighlighted) {
+          context.globalAlpha = 0.8;
+        }
       });
 
       context.globalAlpha = 1.0;
@@ -348,11 +421,43 @@ export function ForceGraph({ paths, pageInfo }: D3ForceGraphProps) {
         context.beginPath();
         const radius = node.isStart || node.isEnd ? 14 : 10;
         context.arc(node.x!, node.y!, radius, 0, 2 * Math.PI);
-        context.fillStyle = node.isStart || node.isEnd ? "#06b6d4" : "#94a3b8";
-        context.strokeStyle = node === activeHoverNode ? "#0891b2" : node.isStart || node.isEnd ? "#0891b2" : "#64748b";
-        context.lineWidth = node === activeHoverNode ? 3 : 1.5;
+
+        let fillStyle = "#94a3b8";
+        let strokeStyle = "#64748b";
+        let lineWidth = 1.5;
+
+        if (node.isStart || node.isEnd) {
+          fillStyle = "#06b6d4";
+          strokeStyle = "#0891b2";
+        }
+
+        if (hasSearchTerm) {
+          if (node.isSearchMatch) {
+            fillStyle = "#f59e0b";
+            strokeStyle = "#d97706";
+            lineWidth = 2.5;
+          } else if (node.isSearchConnected) {
+            // Keep original colors but with full opacity
+          } else {
+            context.globalAlpha = 0.4;
+          }
+        }
+
+        if (node === activeHoverNode) {
+          strokeStyle = "#0891b2";
+          lineWidth = 3;
+        }
+
+        context.fillStyle = fillStyle;
+        context.strokeStyle = strokeStyle;
+        context.lineWidth = lineWidth;
+
         context.fill();
         context.stroke();
+
+        if (hasSearchTerm && !node.isSearchMatch && !node.isSearchConnected) {
+          context.globalAlpha = 1.0;
+        }
       });
 
       const labelScale = Math.max(0.4, Math.min(3.5, 1 / currentTransform.k));
@@ -361,10 +466,27 @@ export function ForceGraph({ paths, pageInfo }: D3ForceGraphProps) {
       context.textAlign = "center";
       context.textBaseline = "bottom";
       context.fillStyle = computedStyle.color || "#111827";
+
       graphData.nodes.forEach((node) => {
-        if (showAllTitles || node.isStart || node.isEnd || node === activeHoverNode) {
+        const shouldShowLabel =
+          showAllTitles ||
+          node.isStart ||
+          node.isEnd ||
+          node === activeHoverNode ||
+          (searchTerm.trim() && node.isSearchMatch);
+
+        if (shouldShowLabel) {
           const offset = (node.isStart || node.isEnd ? 14 : 10) + 5;
+
+          if (searchTerm.trim() && !node.isSearchMatch && !node.isStart && !node.isEnd) {
+            context.globalAlpha = 0.5;
+          }
+
           context.fillText(node.name, node.x!, node.y! - offset);
+
+          if (searchTerm.trim() && !node.isSearchMatch && !node.isStart && !node.isEnd) {
+            context.globalAlpha = 1.0;
+          }
         }
       });
       context.restore();
@@ -382,7 +504,7 @@ export function ForceGraph({ paths, pageInfo }: D3ForceGraphProps) {
       let foundNode = simulation.find(wx, wy, 30 / currentTransform.k);
       if (foundNode) return foundNode;
 
-      context.font = baseFont;
+      context.font = baseFontSize + "px " + baseFontFamily;
       for (const node of graphData.nodes) {
         if (showAllTitles || node.isStart || node.isEnd) {
           const textWidth = context.measureText(node.name).width / 2;
@@ -412,11 +534,21 @@ export function ForceGraph({ paths, pageInfo }: D3ForceGraphProps) {
     d3.select(canvas).call(zoom);
     zoomRef.current = zoom;
 
-    const hasGraphDataChanged = prevGraphDataRef.current !== graphData;
+    const currentStructuralData = {
+      nodeCount: graphData.nodes.length,
+      linkCount: graphData.links.length,
+      pathsLength: paths.length,
+    };
+
+    const hasStructuralChanges =
+      prevStructuralDataRef.current.nodeCount !== currentStructuralData.nodeCount ||
+      prevStructuralDataRef.current.linkCount !== currentStructuralData.linkCount ||
+      prevStructuralDataRef.current.pathsLength !== currentStructuralData.pathsLength;
+
     const dimensionsChanged =
       prevDimensionsRef.current.width !== dimensions.width || prevDimensionsRef.current.height !== dimensions.height;
 
-    if (hasGraphDataChanged || dimensionsChanged) {
+    if (hasStructuralChanges || dimensionsChanged) {
       if (canvasRef.current && zoomRef.current) {
         zoomToFit(canvasRef.current, zoomRef.current, graphData.nodes, width, height);
       }
@@ -540,7 +672,7 @@ export function ForceGraph({ paths, pageInfo }: D3ForceGraphProps) {
     canvas.addEventListener("pointermove", handlePointerMove);
     canvas.addEventListener("click", handleClick);
 
-    prevGraphDataRef.current = graphData;
+    prevStructuralDataRef.current = currentStructuralData;
     prevDimensionsRef.current = dimensions;
 
     return () => {
@@ -549,7 +681,7 @@ export function ForceGraph({ paths, pageInfo }: D3ForceGraphProps) {
       canvas.removeEventListener("click", handleClick);
       d3.select(canvas).on(".zoom", null).on(".drag", null);
     };
-  }, [graphData, dimensions, showAllTitles]);
+  }, [graphData, dimensions, showAllTitles, searchTerm, paths.length]);
 
   const handleReset = () => {
     if (simulationRef.current && initialPositionsRef.current.size > 0) {
@@ -583,6 +715,11 @@ export function ForceGraph({ paths, pageInfo }: D3ForceGraphProps) {
               Large dataset - rendered with Canvas
             </Badge>
           )}
+          {searchTerm.trim() && (
+            <Badge className="bg-amber-500 hover:bg-amber-600 text-white text-xs">
+              {graphData.nodes.filter((n) => n.isSearchMatch).length} matches
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={toggleTitleVisibility}>
@@ -604,7 +741,9 @@ export function ForceGraph({ paths, pageInfo }: D3ForceGraphProps) {
             <div className="font-medium text-sm">{hoveredNode.name}</div>
             <div className="text-xs text-muted-foreground mt-1">
               {hoveredNode.isStart && "Start page • "}
-              {hoveredNode.isEnd && "Goal page • "}Click to visit Wikipedia
+              {hoveredNode.isEnd && "Goal page • "}
+              {hoveredNode.isSearchMatch && "Search match • "}
+              Click to visit Wikipedia
             </div>
           </div>
         )}

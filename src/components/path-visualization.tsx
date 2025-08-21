@@ -5,7 +5,19 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 // import { ScrollArea } from "@/components/ui/scroll-area";
-import { ArrowRight, List, Network, ExternalLink, AlertCircle, ChevronLeft, ChevronRight, Grid3X3 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import {
+  ArrowRight,
+  List,
+  Network,
+  ExternalLink,
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  Grid3X3,
+  Search,
+  X,
+} from "lucide-react";
 import { ForceGraph } from "./path-visualization-modes/force-graph";
 import { Button } from "./ui/button";
 // import { mockPaths } from "./data";
@@ -33,6 +45,7 @@ export function PathVisualization({
   const [viewMode, setViewMode] = useState<"list" | "graph" | "grid">("grid");
   const [currentPage, setCurrentPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const itemsPerPage = 9; // Increased items per page for more compact list
 
   const getWikipediaUrl = (title: string) => {
@@ -95,7 +108,7 @@ export function PathVisualization({
       return (
         <Card
           key={actualPathIndex}
-          className="p-0 gap-0 cursor-pointer overflow-hidden hover:shadow-md transition-all duration-200 group"
+          className="p-0 gap-0 overflow-hidden hover:shadow-md transition-all duration-200 group"
         >
           <div className="p-3 border-b bg-muted/30">
             <div className="flex items-center justify-between">
@@ -118,7 +131,7 @@ export function PathVisualization({
                   <div
                     onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
                     key={pageIndex}
-                    className="border-b last:border-b-0"
+                    className="cursor-pointer border-b last:border-b-0"
                   >
                     <div className="flex items-center gap-3 p-3 hover:bg-muted/30 transition-colors">
                       <div className="flex-shrink-0">
@@ -325,10 +338,34 @@ export function PathVisualization({
         Interactive force-directed visualization • Drag nodes and click to visit Wikipedia pages
       </div>
 
-      <ForceGraph paths={paths} pageInfo={pageInfo} />
+      <div className="flex items-center justify-center">
+        <div className="relative w-full max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Search for a page in the graph..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10 pr-10"
+          />
+          {searchTerm && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+              onClick={() => setSearchTerm("")}
+            >
+              <X className="w-3 h-3" />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <ForceGraph paths={paths} pageInfo={pageInfo} searchTerm={searchTerm} />
 
       <div className="text-xs text-muted-foreground text-center">
         Showing all {paths.length} paths with optimized layout for performance
+        {searchTerm && <span className="block mt-1 text-amber-600">Highlighting nodes matching "{searchTerm}"</span>}
       </div>
     </div>
   );

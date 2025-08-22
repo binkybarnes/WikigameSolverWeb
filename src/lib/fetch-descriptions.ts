@@ -32,7 +32,7 @@ async function fetchPageInfoBatch(pageIds: number[], retries = 3, backoff = 500)
   });
 
   try {
-    const res = await fetch(`${url}?${params.toString()}`);
+    const res = await fetch(`${url}?${params.toString()}`, { cache: "force-cache" });
 
     // Handle rate limiting (429) with exponential backoff
     if (res.status === 429 && retries > 0) {

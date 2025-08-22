@@ -62,7 +62,7 @@ export function PathVisualization({
       const actualIndex = showAll ? index : startIndex + index;
 
       return (
-        <Card key={actualIndex} className={`transition-all duration-200 cursor-pointer hover:shadow-md`}>
+        <Card key={actualIndex} className={`py-3 transition-all duration-200 hover:shadow-md`}>
           <CardContent className="p-3">
             <div className="flex items-center justify-between mb-1">
               <Badge variant="outline" className="text-xs px-2 py-0.5">
@@ -77,7 +77,7 @@ export function PathVisualization({
                 if (!page) return null;
 
                 return (
-                  <div key={pageIndex} className="flex items-center gap-1.5">
+                  <div key={pageIndex} className="cursor-pointer flex items-center gap-1.5">
                     <a
                       href={getWikipediaUrl(page.title)}
                       target="_blank"
@@ -131,25 +131,20 @@ export function PathVisualization({
                   <div
                     onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
                     key={pageIndex}
-                    className="cursor-pointer border-b last:border-b-0"
+                    className="border-b last:border-b-0"
                   >
-                    <div className="flex items-center gap-3 p-3 hover:bg-muted/30 transition-colors">
-                      <div className="flex-shrink-0">
+                    <div className="cursor-pointer flex items-center gap-3 p-3 hover:bg-muted/30 transition-colors">
+                      <div className="w-16 h-16 flex items-center justify-center flex-shrink-0 bg-muted rounded">
                         <img
                           src={page.thumbnailUrl || "/vite.svg"}
                           alt={page.title}
-                          className="w-12 h-8 object-cover rounded"
+                          className="w-14 h-14 object-contain"
                         />
                       </div>
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <h4 className="font-medium text-sm line-clamp-1">{page.title}</h4>
-                          {isStartOrEnd && (
-                            <Badge className="bg-cyan-500 hover:bg-cyan-600 text-white text-xs px-1.5 py-0">
-                              {pageIndex === 0 ? "Start" : "End"}
-                            </Badge>
-                          )}
                         </div>
                         <p className="text-xs text-muted-foreground line-clamp-1 mb-1">{page.description}</p>
                       </div>
@@ -323,7 +318,7 @@ export function PathVisualization({
           </div>
         </div>
 
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-4 min-h-[350px]">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-4 min-h-[350px] items-start">
           {memoizedGridItems}
         </div>
 

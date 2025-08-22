@@ -3,15 +3,32 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, ArrowRight, Zap, Globe, Trophy } from "lucide-react";
+import {
+  Search,
+  ArrowRight,
+  Zap,
+  Globe,
+  Trophy,
+  Clock,
+  Target,
+  Cable,
+} from "lucide-react";
 import { Maximize, Minimize } from "lucide-react";
 
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Leaderboard } from "@/components/leaderboard";
 import { PathVisualization } from "@/components/path-visualization";
+import { WikipediaAutocomplete } from "@/components/wikipedia-autocomplete";
 import { createPageInfoMap, type PageInfoMap } from "./lib/fetch-descriptions";
+import { formatComputeTime } from "./lib/utils";
 
 export default function WikipediaPathFinder() {
   const [startPage, setStartPage] = useState("");
@@ -21,23 +38,29 @@ export default function WikipediaPathFinder() {
   const [activeTab, setActiveTab] = useState("finder");
   const [error, setError] = useState<string | null>(null);
 
+  const [searchResults, setSearchResults] = useState<{
+    pathCount: number;
+    pathLength: number;
+    computeTime: number;
+  } | null>(null);
+
   const scrollPositionRef = useRef(0);
 
   const [paths, setPaths] = useState<number[][]>([]);
   const [pageInfo, setPageInfo] = useState<PageInfoMap>({});
 
-  // GET DESCRIPTIONS MAP
-  useEffect(() => {
-    const allPageIds = paths.flat();
-    const uniquePageIds = [...new Set(allPageIds)];
+  // // GET DESCRIPTIONS MAP
+  // useEffect(() => {
+  //   const allPageIds = paths.flat();
+  //   const uniquePageIds = [...new Set(allPageIds)];
 
-    if (uniquePageIds.length > 0) {
-      (async () => {
-        const infoMap = await createPageInfoMap(uniquePageIds);
-        setPageInfo(infoMap);
-      })();
-    }
-  }, [paths]);
+  //   if (uniquePageIds.length > 0) {
+  //     (async () => {
+  //       const infoMap = await createPageInfoMap(uniquePageIds);
+  //       setPageInfo(infoMap);
+  //     })();
+  //   }
+  // }, [paths]);
 
   const API_URL = import.meta.env.VITE_API_URL;
 
@@ -53,6 +76,7 @@ export default function WikipediaPathFinder() {
     setIsSearching(true);
     setHasResults(false);
     setError(null);
+    setSearchResults(null);
 
     // Compute the ETag based on your inputs
     const etag = `${startPageNormal}-${endPageNormal}-${outputAsIds}`;
@@ -62,6 +86,12 @@ export default function WikipediaPathFinder() {
       const cachedResult = searchCache.current.get(etag);
       console.log("cached data:", cachedResult);
       setPaths(cachedResult.paths);
+      setPageInfo(cachedResult.pageInfo);
+      setSearchResults({
+        pathCount: cachedResult.num_paths,
+        pathLength: cachedResult.paths[0]?.length,
+        computeTime: cachedResult.elapsed_s,
+      });
 
       setHasResults(true);
       setIsSearching(false);
@@ -84,7 +114,9 @@ export default function WikipediaPathFinder() {
 
       if (!response.ok) {
         if (response.status === 429) {
-          setError("Rate limit exceeded! Please wait before making another request.");
+          setError(
+            "Rate limit exceeded! Please wait before making another request.",
+          );
           return;
         }
 
@@ -107,6 +139,11 @@ export default function WikipediaPathFinder() {
 
       console.log("Search result:", data);
       setPaths(data.paths);
+      setSearchResults({
+        pathCount: data.num_paths,
+        pathLength: data.paths[0]?.length,
+        computeTime: data.elapsed_s,
+      });
 
       // 🔥 fetch page info right here
       const allPageIds = data.paths.flat();
@@ -120,7 +157,7 @@ export default function WikipediaPathFinder() {
       console.log(infoMap);
 
       // cache both paths + page info
-      searchCache.current.set(etag, { paths: data.paths, pageInfo: infoMap });
+      searchCache.current.set(etag, { ...data, pageInfo: infoMap });
 
       setHasResults(true);
     } catch (err) {
@@ -172,18 +209,20 @@ export default function WikipediaPathFinder() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background text-foreground min-h-screen">
       {/* Header */}
-      <header className="border-b border-border bg-card/50 backdrop-blur-sm">
+      <header className="border-border bg-card/50 border-b backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-8 h-8 bg-primary rounded-md">
-                <Globe className="w-4 h-4 text-primary-foreground" />
+              <div className="bg-primary flex h-8 w-8 items-center justify-center rounded-md">
+                <Globe className="text-primary-foreground h-4 w-4" />
               </div>
               <div>
-                <h1 className="text-lg font-bold font-mono tracking-tight">Wikipedia Paths Finder</h1>
-                <p className="text-sm text-muted-foreground">
+                <h1 className="text-foreground font-mono text-xl font-bold tracking-tight">
+                  Wikipedia Paths Finder
+                </h1>
+                <p className="text-muted-foreground text-base">
                   Discover all shortest paths between any two Wikipedia articles
                 </p>
               </div>
@@ -193,15 +232,21 @@ export default function WikipediaPathFinder() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8 max-w-6xl">
+      <main className="container mx-auto max-w-6xl px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-8">
-            <TabsTrigger value="finder" className="flex items-center gap-2">
-              <Search className="w-4 h-4" />
+          <TabsList className="mb-8 grid w-full grid-cols-2">
+            <TabsTrigger
+              value="finder"
+              className="flex items-center gap-2 text-base"
+            >
+              <Search className="h-4 w-4" />
               Path Finder
             </TabsTrigger>
-            <TabsTrigger value="leaderboard" className="flex items-center gap-2">
-              <Trophy className="w-4 h-4" />
+            <TabsTrigger
+              value="leaderboard"
+              className="flex items-center gap-2 text-base"
+            >
+              <Trophy className="h-4 w-4" />
               Leaderboards
             </TabsTrigger>
           </TabsList>
@@ -210,38 +255,45 @@ export default function WikipediaPathFinder() {
             {/* Search Interface */}
             <Card className="shadow-sm">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 font-mono">
-                  <Zap className="w-5 h-5 text-primary" />
+                <CardTitle className="flex items-center gap-2 font-mono text-xl">
+                  <Cable className="text-primary h-5 w-5" />
                   Find Connections
                 </CardTitle>
-                <CardDescription>
-                  Enter two Wikipedia page titles to find all shortest paths between them
+                <CardDescription className="text-foreground text-base">
+                  Enter two Wikipedia page titles to find all shortest paths
+                  between them
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <label htmlFor="start-page" className="text-sm font-medium text-foreground">
+                    <label
+                      htmlFor="start-page"
+                      className="text-foreground text-base font-medium"
+                    >
                       Start Page
                     </label>
-                    <Input
+                    <WikipediaAutocomplete
                       id="start-page"
                       placeholder="e.g., Albert Einstein"
                       value={startPage}
-                      onChange={(e) => setStartPage(e.target.value)}
-                      className="bg-input border-border focus:ring-primary/20 focus:border-primary transition-colors"
+                      onChange={setStartPage}
+                      className="bg-input border-border focus:ring-primary/20 focus:border-primary text-base transition-colors"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label htmlFor="end-page" className="text-sm font-medium text-foreground">
+                    <label
+                      htmlFor="end-page"
+                      className="text-foreground text-base font-medium"
+                    >
                       End Page
                     </label>
-                    <Input
+                    <WikipediaAutocomplete
                       id="end-page"
                       placeholder="e.g., Quantum Physics"
                       value={endPage}
-                      onChange={(e) => setEndPage(e.target.value)}
-                      className="bg-input border-border focus:ring-primary/20 focus:border-primary transition-colors"
+                      onChange={setEndPage}
+                      className="bg-input border-border focus:ring-primary/20 focus:border-primary auto text-base transition-colors"
                     />
                   </div>
                 </div>
@@ -249,52 +301,116 @@ export default function WikipediaPathFinder() {
                 <Button
                   onClick={handleSearch}
                   disabled={!startPage.trim() || !endPage.trim() || isSearching}
-                  className="w-full md:w-auto bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-all duration-200"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground w-full px-6 py-3 text-base font-medium transition-all duration-200 md:w-auto"
                 >
                   {isSearching ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-2" />
+                      <div className="border-primary-foreground/30 border-t-primary-foreground mr-2 h-4 w-4 animate-spin rounded-full border-2" />
                       Searching...
                     </>
                   ) : (
                     <>
-                      <Search className="w-4 h-4 mr-2" />
+                      <Search className="mr-2 h-4 w-4" />
                       Find Paths
                     </>
                   )}
                 </Button>
                 {error && (
-                  <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-                    <div className="flex items-center gap-2 text-destructive">
-                      <div className="w-4 h-4 rounded-full bg-destructive flex items-center justify-center">
-                        <span className="text-destructive-foreground text-xs font-bold">!</span>
+                  <div className="bg-destructive/10 border-destructive/20 rounded-lg border p-4">
+                    <div className="text-destructive flex items-center gap-2">
+                      <div className="bg-destructive flex h-4 w-4 items-center justify-center rounded-full">
+                        <span className="text-destructive-foreground text-xs font-bold">
+                          !
+                        </span>
                       </div>
-                      <span className="font-medium">Error</span>
+                      <span className="text-base">Error</span>
                     </div>
-                    <p className="text-sm text-destructive/80 mt-1">{error}</p>
+                    <p className="text-destructive/80 mt-1 text-base">
+                      {error}
+                    </p>
                   </div>
                 )}
               </CardContent>
             </Card>
 
+            {searchResults && (
+              <Card className="border-primary/20 bg-primary/5 border-2 shadow-lg">
+                <CardContent className="">
+                  <div className="flex items-center justify-center gap-8 text-center">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-primary/10 flex h-12 w-12 items-center justify-center rounded-full">
+                        <Target className="text-primary h-6 w-6" />
+                      </div>
+                      <div>
+                        <div className="text-foreground font-mono text-3xl font-bold">
+                          {searchResults.pathCount}
+                        </div>
+                        <div className="text-muted-foreground text-lg">
+                          Shortest Paths Found
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-border h-16 w-px" />
+
+                    <div className="flex items-center gap-3">
+                      <div className="bg-primary/10 flex h-12 w-12 items-center justify-center rounded-full">
+                        <ArrowRight className="text-primary h-6 w-6" />
+                      </div>
+                      <div>
+                        <div className="text-foreground font-mono text-3xl font-bold">
+                          {searchResults.pathLength}
+                        </div>
+                        <div className="text-muted-foreground text-lg">
+                          Steps per Path
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-border h-16 w-px" />
+
+                    <div className="flex items-center gap-3">
+                      <div className="bg-primary/10 flex h-12 w-12 items-center justify-center rounded-full">
+                        <Clock className="text-primary h-6 w-6" />
+                      </div>
+                      <div>
+                        <div className="text-foreground font-mono text-3xl font-bold">
+                          {formatComputeTime(searchResults.computeTime)}
+                        </div>
+                        <div className="text-muted-foreground text-lg">
+                          Compute Time
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Graph Visualization Area */}
             <Card ref={wrapperRef} className="shadow-sm">
-              <CardHeader className="flex justify-between items-start">
+              <CardHeader className="flex items-start justify-between">
                 <div>
-                  <CardTitle className="flex items-center gap-2 font-mono">
-                    <ArrowRight className="w-5 h-5 text-primary" />
+                  <CardTitle className="flex items-center gap-2 font-mono text-xl">
+                    <ArrowRight className="text-primary h-5 w-5" />
                     Paths Visualization
                   </CardTitle>
-                  <CardDescription>All shortest paths between articles will appear here</CardDescription>
+                  <CardDescription className="text-base">
+                    All shortest paths between articles will appear here
+                  </CardDescription>
                 </div>
 
                 {/* Fullscreen button */}
                 <Button size="sm" variant="outline" onClick={toggleFullscreen}>
-                  {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+                  {isFullscreen ? (
+                    <Minimize className="h-4 w-4" />
+                  ) : (
+                    <Maximize className="h-4 w-4" />
+                  )}
                 </Button>
               </CardHeader>
 
-              <CardContent className="flex-1 flex flex-col">
+              <CardContent className="flex flex-1 flex-col">
                 <PathVisualization
                   // ref={pathRef}
                   startPage={startPage}
@@ -309,14 +425,14 @@ export default function WikipediaPathFinder() {
             </Card>
 
             {/* Status Bar */}
-            <div className="flex items-center justify-between text-xs text-muted-foreground bg-card/50 px-4 py-2 rounded-lg border border-border">
+            <div className="text-muted-foreground bg-card/50 border-border flex items-center justify-between rounded-lg border px-4 py-2 text-sm">
               <div className="flex items-center gap-4">
                 <span>Ready</span>
                 <span>•</span>
                 <span>Wikipedia API Connected</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+                <div className="bg-primary h-2 w-2 animate-pulse rounded-full" />
                 <span>Live</span>
               </div>
             </div>

@@ -460,7 +460,9 @@ export function ForceGraph({ paths, pageInfo, searchTerm = "" }: D3ForceGraphPro
         }
       });
 
-      const labelScale = Math.max(0.4, Math.min(3.5, 1 / currentTransform.k));
+      const baseMax = 3.5;
+      const dynamicMax = Math.min(8, baseMax + Math.log10(graphData.nodes.length + 1)); // more nodes, bigger the label can scale to
+      const labelScale = Math.max(0.4, Math.min(dynamicMax, 1 / currentTransform.k));
       const effectiveFontSize = baseFontSize * labelScale;
       context.font = `bold ${effectiveFontSize}px ${baseFontFamily}`;
       context.textAlign = "center";
@@ -733,7 +735,10 @@ export function ForceGraph({ paths, pageInfo, searchTerm = "" }: D3ForceGraphPro
         </div>
       </div>
       <div className="relative flex-1">
-        <div ref={containerRef} className="h-full bg-background border rounded-lg overflow-hidden touch-none">
+        <div
+          ref={containerRef}
+          className="h-full min-h-[500px] bg-background border rounded-lg overflow-hidden touch-none"
+        >
           <canvas ref={canvasRef} />
         </div>
         {hoveredNode && (

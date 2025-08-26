@@ -20,3 +20,10 @@ export function formatComputeTime(seconds: number): string {
     return `${seconds.toFixed(2)} s`;
   }
 }
+
+type Provider = "guest" | "google";
+export interface UserType {
+  userId: string;
+  username: string;
+  provider: Provider;
+}

@@ -62,13 +62,16 @@ export function PathVisualization({
       const actualIndex = showAll ? index : startIndex + index;
 
       return (
-        <Card key={actualIndex} className={`py-3 transition-all duration-200 hover:shadow-md`}>
+        <Card
+          key={actualIndex}
+          className={`py-3 transition-all duration-200 hover:shadow-md`}
+        >
           <CardContent className="p-3">
-            <div className="flex items-center justify-between mb-1">
-              <Badge variant="outline" className="text-xs px-2 py-0.5">
+            <div className="mb-1 flex items-center justify-between">
+              <Badge variant="outline" className="px-2 py-0.5 text-xs">
                 Path {actualIndex + 1} • {path.length - 1} steps
               </Badge>
-              <ChevronRight className={`w-3 h-3 transition-transform`} />
+              <ChevronRight className={`h-3 w-3 transition-transform`} />
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5">
@@ -77,18 +80,23 @@ export function PathVisualization({
                 if (!page) return null;
 
                 return (
-                  <div key={pageIndex} className="cursor-pointer flex items-center gap-1.5">
+                  <div
+                    key={pageIndex}
+                    className="flex cursor-pointer items-center gap-1.5"
+                  >
                     <a
                       href={getWikipediaUrl(page.title)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 px-2 py-0.5 bg-muted hover:bg-muted/80 rounded text-xs font-medium transition-colors group"
+                      className="bg-muted hover:bg-muted/80 group inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium transition-colors"
                       onClick={(e) => e.stopPropagation()}
                     >
                       {page.title.replace(/_/g, " ")}
-                      <ExternalLink className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <ExternalLink className="h-2.5 w-2.5 opacity-0 transition-opacity group-hover:opacity-100" />
                     </a>
-                    {pageIndex < path.length - 1 && <ArrowRight className="w-2.5 h-2.5 text-muted-foreground" />}
+                    {pageIndex < path.length - 1 && (
+                      <ArrowRight className="text-muted-foreground h-2.5 w-2.5" />
+                    )}
                   </div>
                 );
               })}
@@ -108,49 +116,58 @@ export function PathVisualization({
       return (
         <Card
           key={actualPathIndex}
-          className="p-0 gap-0 overflow-hidden hover:shadow-md transition-all duration-200 group"
+          className="group gap-0 overflow-hidden p-0 transition-all duration-200 hover:shadow-md"
         >
-          <div className="p-3 border-b bg-muted/30">
+          <div className="bg-muted/30 border-b p-3">
             <div className="flex items-center justify-between">
               <Badge variant="outline" className="text-xs">
                 Path {actualPathIndex + 1}
               </Badge>
-              <span className="text-xs text-muted-foreground">{path.length - 1} steps</span>
+              <span className="text-muted-foreground text-xs">
+                {path.length - 1} steps
+              </span>
             </div>
           </div>
 
           <CardContent className="p-0">
             <div className="space-y-0">
               {path.map((pageId, pageIndex) => {
-                const isStartOrEnd = pageIndex === 0 || pageIndex === path.length - 1;
+                const isStartOrEnd =
+                  pageIndex === 0 || pageIndex === path.length - 1;
                 const page = pageInfo[pageId];
                 if (!page) return null;
                 const url = getWikipediaUrl(page.title);
 
                 return (
                   <div
-                    onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+                    onClick={() =>
+                      window.open(url, "_blank", "noopener,noreferrer")
+                    }
                     key={pageIndex}
                     className="border-b last:border-b-0"
                   >
-                    <div className="cursor-pointer flex items-center gap-3 p-3 hover:bg-muted/30 transition-colors">
-                      <div className="w-16 h-16 flex items-center justify-center flex-shrink-0 bg-muted rounded">
+                    <div className="hover:bg-muted/30 flex cursor-pointer items-center gap-3 p-3 transition-colors">
+                      <div className="bg-muted flex h-16 w-16 flex-shrink-0 items-center justify-center rounded">
                         <img
                           src={page.thumbnailUrl || "/vite.svg"}
                           alt={page.title}
-                          className="w-14 h-14 object-contain"
+                          className="h-14 w-14 object-contain"
                         />
                       </div>
 
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h4 className="font-medium text-sm line-clamp-1">{page.title}</h4>
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-1 flex items-center gap-2">
+                          <h4 className="line-clamp-1 text-sm font-medium">
+                            {page.title}
+                          </h4>
                         </div>
-                        <p className="text-xs text-muted-foreground line-clamp-1 mb-1">{page.description}</p>
+                        <p className="text-muted-foreground mb-1 line-clamp-1 text-xs">
+                          {page.description}
+                        </p>
                       </div>
 
                       {pageIndex < path.length - 1 && (
-                        <ArrowRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                        <ArrowRight className="text-muted-foreground h-3 w-3 flex-shrink-0" />
                       )}
                     </div>
                   </div>
@@ -163,7 +180,11 @@ export function PathVisualization({
     });
   }, [currentGridPaths, showAll, startIndex, pageInfo]);
 
-  const renderPagination = (totalPages: number, currentPage: number, setCurrentPage: (page: number) => void) => {
+  const renderPagination = (
+    totalPages: number,
+    currentPage: number,
+    setCurrentPage: (page: number) => void,
+  ) => {
     if (totalPages <= 1) return null;
 
     const getVisiblePages = () => {
@@ -222,7 +243,7 @@ export function PathVisualization({
             onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
             disabled={currentPage === 1}
           >
-            <ChevronLeft className="w-4 h-4" />
+            <ChevronLeft className="h-4 w-4" />
             <span className="hidden sm:inline">Previous</span>
           </Button>
         </div>
@@ -230,7 +251,10 @@ export function PathVisualization({
         <div className="flex items-center gap-1">
           {visiblePages.map((page, index) =>
             page === "..." ? (
-              <span key={`ellipsis-${index}`} className="px-2 text-muted-foreground">
+              <span
+                key={`ellipsis-${index}`}
+                className="text-muted-foreground px-2"
+              >
                 ...
               </span>
             ) : (
@@ -238,12 +262,12 @@ export function PathVisualization({
                 key={page}
                 variant={currentPage === page ? "default" : "outline"}
                 size="sm"
-                className="w-8 h-8 p-0"
+                className="h-8 w-8 p-0"
                 onClick={() => setCurrentPage(page as number)}
               >
                 {page}
               </Button>
-            )
+            ),
           )}
         </div>
 
@@ -251,11 +275,13 @@ export function PathVisualization({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+            onClick={() =>
+              setCurrentPage(Math.min(totalPages, currentPage + 1))
+            }
             disabled={currentPage === totalPages}
           >
             <span className="hidden sm:inline">Next</span>
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
@@ -274,22 +300,28 @@ export function PathVisualization({
   const renderListView = () => (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">
-          Found {paths.length} shortest paths (length: {paths[0]?.length - 1 || 0})
+        <div className="text-muted-foreground text-sm">
+          Found {paths.length} shortest paths (length: {paths[0]?.length || 0})
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={() => setShowAll(!showAll)} className="text-xs">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAll(!showAll)}
+            className="text-xs"
+          >
             {showAll ? "Show Pages" : "Show All"}
           </Button>
           {!showAll && (
-            <div className="text-xs text-muted-foreground">
-              Showing {startIndex + 1}-{Math.min(endIndex, paths.length)} of {paths.length}
+            <div className="text-muted-foreground text-xs">
+              Showing {startIndex + 1}-{Math.min(endIndex, paths.length)} of{" "}
+              {paths.length}
             </div>
           )}
         </div>
       </div>
 
-      <div className="space-y-2 min-h-[350px]">{memoizedListItems}</div>
+      <div className="min-h-[350px] space-y-2">{memoizedListItems}</div>
 
       {!showAll && renderPagination(totalPages, currentPage, setCurrentPage)}
     </div>
@@ -303,54 +335,63 @@ export function PathVisualization({
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <div className="text-sm text-muted-foreground">
-            Found {paths.length} shortest paths (length: {paths[0]?.length - 1 || 0})
+          <div className="text-muted-foreground text-sm">
+            Found {paths.length} shortest paths (length:{" "}
+            {paths[0]?.length - 1 || 0})
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={() => setShowAll(!showAll)} className="text-xs">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAll(!showAll)}
+              className="text-xs"
+            >
               {showAll ? "Show Pages" : "Show All"}
             </Button>
             {!showAll && (
-              <div className="text-xs text-muted-foreground">
-                Showing {gridStartIndex + 1}-{Math.min(gridEndIndex, paths.length)} of {paths.length}
+              <div className="text-muted-foreground text-xs">
+                Showing {gridStartIndex + 1}-
+                {Math.min(gridEndIndex, paths.length)} of {paths.length}
               </div>
             )}
           </div>
         </div>
 
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-4 min-h-[350px] items-start">
+        <div className="grid min-h-[350px] grid-cols-[repeat(auto-fit,minmax(320px,1fr))] items-start gap-4">
           {memoizedGridItems}
         </div>
 
-        {!showAll && renderPagination(totalGridPages, currentPage, setCurrentPage)}
+        {!showAll &&
+          renderPagination(totalGridPages, currentPage, setCurrentPage)}
       </div>
     );
   };
 
   const renderGraphView = () => (
-    <div className="space-y-4 flex-1 flex flex-col">
-      <div className="text-sm text-muted-foreground text-center">
-        Interactive force-directed visualization • Drag nodes and click to visit Wikipedia pages
+    <div className="flex flex-1 flex-col space-y-4">
+      <div className="text-muted-foreground text-center text-sm">
+        Interactive force-directed visualization • Drag nodes and click to visit
+        Wikipedia pages
       </div>
 
       <div className="flex items-center justify-center">
         <div className="relative w-full max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform" />
           <Input
             type="text"
             placeholder="Search for a page in the graph..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 pr-10"
+            className="pr-10 pl-10"
           />
           {searchTerm && (
             <Button
               variant="ghost"
               size="sm"
-              className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+              className="absolute top-1/2 right-1 h-6 w-6 -translate-y-1/2 transform p-0"
               onClick={() => setSearchTerm("")}
             >
-              <X className="w-3 h-3" />
+              <X className="h-3 w-3" />
             </Button>
           )}
         </div>
@@ -358,9 +399,13 @@ export function PathVisualization({
 
       <ForceGraph paths={paths} pageInfo={pageInfo} searchTerm={searchTerm} />
 
-      <div className="text-xs text-muted-foreground text-center">
+      <div className="text-muted-foreground text-center text-xs">
         Showing all {paths.length} paths with optimized layout for performance
-        {searchTerm && <span className="block mt-1 text-amber-600">Highlighting nodes matching "{searchTerm}"</span>}
+        {searchTerm && (
+          <span className="mt-1 block text-amber-600">
+            Highlighting nodes matching "{searchTerm}"
+          </span>
+        )}
       </div>
     </div>
   );
@@ -372,12 +417,16 @@ export function PathVisualization({
 
   if (isSearching) {
     return (
-      <div className="min-h-[400px] bg-muted/30 rounded-lg border-2 border-dashed border-border flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" />
+      <div className="bg-muted/30 border-border flex min-h-[400px] items-center justify-center rounded-lg border-2 border-dashed">
+        <div className="space-y-4 text-center">
+          <div className="border-primary/30 border-t-primary mx-auto h-8 w-8 animate-spin rounded-full border-2" />
           <div className="space-y-2">
-            <p className="text-sm font-medium text-foreground">Analyzing Wikipedia connections...</p>
-            <p className="text-xs text-muted-foreground">This may take a few moments</p>
+            <p className="text-foreground text-sm font-medium">
+              Analyzing Wikipedia connections...
+            </p>
+            <p className="text-muted-foreground text-xs">
+              This may take a few moments
+            </p>
           </div>
         </div>
       </div>
@@ -386,13 +435,16 @@ export function PathVisualization({
 
   if (error) {
     return (
-      <div className="min-h-[400px] bg-muted/30 rounded-lg border-2 border-dashed border-destructive/20 flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <AlertCircle className="w-12 h-12 text-destructive/70 mx-auto" />
+      <div className="bg-muted/30 border-destructive/20 flex min-h-[400px] items-center justify-center rounded-lg border-2 border-dashed">
+        <div className="space-y-4 text-center">
+          <AlertCircle className="text-destructive/70 mx-auto h-12 w-12" />
           <div className="space-y-2">
-            <p className="text-sm font-medium text-destructive">Search Failed</p>
-            <p className="text-xs text-muted-foreground max-w-md">
-              Unable to find paths between the specified Wikipedia pages. Please check the page titles and try again.
+            <p className="text-destructive text-sm font-medium">
+              Search Failed
+            </p>
+            <p className="text-muted-foreground max-w-md text-xs">
+              Unable to find paths between the specified Wikipedia pages. Please
+              check the page titles and try again.
             </p>
           </div>
         </div>
@@ -402,24 +454,28 @@ export function PathVisualization({
 
   if (!hasResults) {
     return (
-      <div className="min-h-[400px] bg-muted/30 rounded-lg border-2 border-dashed border-border flex items-center justify-center">
+      <div className="bg-muted/30 border-border flex min-h-[400px] items-center justify-center rounded-lg border-2 border-dashed">
         {startPage && endPage ? (
-          <div className="text-center space-y-4">
+          <div className="space-y-4 text-center">
             <div className="flex items-center justify-center gap-4 text-sm">
               <Badge variant="secondary" className="px-3 py-1">
                 {startPage}
               </Badge>
-              <ArrowRight className="w-4 h-4 text-muted-foreground" />
+              <ArrowRight className="text-muted-foreground h-4 w-4" />
               <Badge variant="secondary" className="px-3 py-1">
                 {endPage}
               </Badge>
             </div>
-            <p className="text-sm text-muted-foreground">Click "Find Paths" to discover all connections</p>
+            <p className="text-muted-foreground text-sm">
+              Click "Find Paths" to discover all connections
+            </p>
           </div>
         ) : (
-          <div className="text-center space-y-2">
-            <Network className="w-12 h-12 text-muted-foreground/50 mx-auto" />
-            <p className="text-sm text-muted-foreground">Enter two Wikipedia pages to visualize their connections</p>
+          <div className="space-y-2 text-center">
+            <Network className="text-muted-foreground/50 mx-auto h-12 w-12" />
+            <p className="text-muted-foreground text-sm">
+              Enter two Wikipedia pages to visualize their connections
+            </p>
           </div>
         )}
       </div>
@@ -427,27 +483,31 @@ export function PathVisualization({
   }
 
   return (
-    <div className="space-y-4 flex-1 flex-col flex">
+    <div className="flex flex-1 flex-col space-y-4">
       <div className="flex items-center justify-between">
         <Tabs value={viewMode} onValueChange={handleViewModeChange}>
           <TabsList className="grid w-fit grid-cols-3">
             <TabsTrigger value="grid" className="flex items-center gap-2">
-              <Grid3X3 className="w-4 h-4" />
+              <Grid3X3 className="h-4 w-4" />
               Grid View
             </TabsTrigger>
             <TabsTrigger value="list" className="flex items-center gap-2">
-              <List className="w-4 h-4" />
+              <List className="h-4 w-4" />
               List View
             </TabsTrigger>
             <TabsTrigger value="graph" className="flex items-center gap-2">
-              <Network className="w-4 h-4" />
+              <Network className="h-4 w-4" />
               Graph View
             </TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
 
-      {viewMode === "list" ? renderListView() : viewMode === "grid" ? renderGridView() : renderGraphView()}
+      {viewMode === "list"
+        ? renderListView()
+        : viewMode === "grid"
+          ? renderGridView()
+          : renderGraphView()}
     </div>
   );
 }

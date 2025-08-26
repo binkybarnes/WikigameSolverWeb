@@ -20,6 +20,9 @@ import {
   Clock,
   Target,
   Cable,
+  LogOut,
+  Settings,
+  User,
 } from "lucide-react";
 import { Maximize, Minimize } from "lucide-react";
 
@@ -28,7 +31,10 @@ import { Leaderboard } from "@/components/leaderboard";
 import { PathVisualization } from "@/components/path-visualization";
 import { WikipediaAutocomplete } from "@/components/wikipedia-autocomplete";
 import { createPageInfoMap, type PageInfoMap } from "./lib/fetch-descriptions";
-import { formatComputeTime } from "./lib/utils";
+import { formatComputeTime, type UserType } from "./lib/utils";
+import { UserDropdown } from "./components/user-dropdown";
+import SignInModal from "./components/sign-in-modal";
+import ChangeUsernameModal from "./components/change-username-modal";
 
 export default function WikipediaPathFinder() {
   const [startPage, setStartPage] = useState("");
@@ -48,21 +54,41 @@ export default function WikipediaPathFinder() {
 
   const [paths, setPaths] = useState<number[][]>([]);
   const [pageInfo, setPageInfo] = useState<PageInfoMap>({});
+  const [isSignInOpen, setIsSignInOpen] = useState(false);
+  const [isChangeUsernameModalOpen, setIsChangeUsernameModalOpen] =
+    useState(false);
 
-  // // GET DESCRIPTIONS MAP
-  // useEffect(() => {
-  //   const allPageIds = paths.flat();
-  //   const uniquePageIds = [...new Set(allPageIds)];
-
-  //   if (uniquePageIds.length > 0) {
-  //     (async () => {
-  //       const infoMap = await createPageInfoMap(uniquePageIds);
-  //       setPageInfo(infoMap);
-  //     })();
-  //   }
-  // }, [paths]);
+  type Provider = "guest" | "google";
+  const [user, setUser] = useState<UserType | null>(null);
 
   const API_URL = import.meta.env.VITE_API_URL;
+
+  // in a top-level component or App.tsx
+  useEffect(() => {
+    async function loadMe() {
+      try {
+        const res = await fetch(`${API_URL}/me`, {
+          method: "GET",
+          credentials: "include",
+        });
+        if (res.ok) {
+          const json = await res.json();
+          setUser({
+            userId: json.user_id,
+            username: json.username,
+            provider: json.provider,
+          });
+          console.log(json);
+        } else {
+          console.error("me failed:", await res.text());
+        }
+      } catch (e) {
+        console.error("failed to /me", e);
+      }
+    }
+
+    loadMe();
+  }, [API_URL]);
 
   const searchCache = useRef(new Map<string, any>());
 
@@ -88,7 +114,7 @@ export default function WikipediaPathFinder() {
       setPaths(cachedResult.paths);
       setPageInfo(cachedResult.pageInfo);
       setSearchResults({
-        pathCount: cachedResult.num_paths,
+        pathCount: cachedResult.paths.length,
         pathLength: cachedResult.paths[0]?.length,
         computeTime: cachedResult.elapsed_s,
       });
@@ -110,6 +136,7 @@ export default function WikipediaPathFinder() {
           end: endPageNormal,
           output_as_ids: outputAsIds,
         }),
+        credentials: "include",
       });
 
       if (!response.ok) {
@@ -140,7 +167,7 @@ export default function WikipediaPathFinder() {
       console.log("Search result:", data);
       setPaths(data.paths);
       setSearchResults({
-        pathCount: data.num_paths,
+        pathCount: data.paths.length,
         pathLength: data.paths[0]?.length,
         computeTime: data.elapsed_s,
       });
@@ -227,7 +254,15 @@ export default function WikipediaPathFinder() {
                 </p>
               </div>
             </div>
-            <ThemeToggle />
+            <div className="flex items-center gap-3">
+              <ThemeToggle />
+              <UserDropdown
+                user={user}
+                setUser={setUser}
+                onSignInClick={() => setIsSignInOpen(true)}
+                onChangeUsernameClick={() => setIsChangeUsernameModalOpen(true)}
+              />
+            </div>
           </div>
         </div>
       </header>
@@ -255,21 +290,21 @@ export default function WikipediaPathFinder() {
             {/* Search Interface */}
             <Card className="shadow-sm">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 font-mono text-xl">
-                  <Cable className="text-primary h-5 w-5" />
-                  Find Connections
+                <CardTitle className="flex items-center gap-2 font-mono text-2xl">
+                  <Cable className="text-primary h-6 w-6" />
+                  Find the shortest paths between...
                 </CardTitle>
-                <CardDescription className="text-foreground text-base">
+                {/* <CardDescription className="text-foreground text-base">
                   Enter two Wikipedia page titles to find all shortest paths
                   between them
-                </CardDescription>
+                </CardDescription> */}
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <label
                       htmlFor="start-page"
-                      className="text-foreground text-base font-medium"
+                      className="text-foreground text-xl font-medium"
                     >
                       Start Page
                     </label>
@@ -278,13 +313,13 @@ export default function WikipediaPathFinder() {
                       placeholder="e.g., Albert Einstein"
                       value={startPage}
                       onChange={setStartPage}
-                      className="bg-input border-border focus:ring-primary/20 focus:border-primary text-base transition-colors"
+                      className="bg-input border-border focus:ring-primary/20 focus:border-primary mt-2 text-base transition-colors"
                     />
                   </div>
                   <div className="space-y-2">
                     <label
                       htmlFor="end-page"
-                      className="text-foreground text-base font-medium"
+                      className="text-foreground text-xl font-medium"
                     >
                       End Page
                     </label>
@@ -293,7 +328,7 @@ export default function WikipediaPathFinder() {
                       placeholder="e.g., Quantum Physics"
                       value={endPage}
                       onChange={setEndPage}
-                      className="bg-input border-border focus:ring-primary/20 focus:border-primary auto text-base transition-colors"
+                      className="bg-input border-border focus:ring-primary/20 focus:border-primary auto mt-2 text-base transition-colors"
                     />
                   </div>
                 </div>
@@ -443,6 +478,19 @@ export default function WikipediaPathFinder() {
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* modals live here */}
+      <SignInModal
+        setUser={setUser}
+        isOpen={isSignInOpen}
+        setIsOpen={setIsSignInOpen}
+        setIsChangeUsernameModalOpen={setIsChangeUsernameModalOpen}
+      />
+      <ChangeUsernameModal
+        isOpen={isChangeUsernameModalOpen}
+        setIsOpen={setIsChangeUsernameModalOpen}
+        setUser={setUser}
+      />
     </div>
   );
 }

@@ -23,6 +23,9 @@ import {
   type PageInfoMap,
   createPageInfoMap,
 } from "@/lib/fetch-descriptions";
+import { renderPagination } from "./render-pagination";
+import { Button } from "./ui/button";
+import { EntriesPerPageSelect } from "./entries-per-page";
 
 // This interface matches your Axum backend response
 interface LeaderboardEntry {
@@ -75,7 +78,7 @@ const LeaderboardRow = ({
         <img
           src={page.thumbnailUrl || "./vite.svg"}
           alt={page.title}
-          className="h-20 w-20 rounded-sm object-cover"
+          className="h-18 w-18 rounded-sm object-cover"
         />
         <span className="truncate text-sm font-medium">{page.title}</span>
       </div>
@@ -124,6 +127,11 @@ export function Leaderboard({ onSearch }: { onSearch: OnSearchHandler }) {
   const [pageInfoMap, setPageInfoMap] = useState<PageInfoMap>({});
   const [isLoading, setIsLoading] = useState(true);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
+  const offset = (currentPage - 1) * itemsPerPage;
+  const totalPages = 5000 / itemsPerPage;
+
   const scrollPositions = useRef({ longest: 0, most: 0 });
 
   useEffect(() => {
@@ -135,7 +143,7 @@ export function Leaderboard({ onSearch }: { onSearch: OnSearchHandler }) {
 
         // 1. Fetch leaderboard data
         const response = await axios.get<LeaderboardEntry[]>(
-          `${API_URL}/leaderboard/${activeLeaderboardTab}?offset=0&limit=50`,
+          `${API_URL}/leaderboard/${activeLeaderboardTab}?offset=${offset}&limit=${itemsPerPage}`,
         );
         const leaderboardData = response.data;
         setData(leaderboardData); // Set data immediately for responsive UI
@@ -160,10 +168,13 @@ export function Leaderboard({ onSearch }: { onSearch: OnSearchHandler }) {
     };
 
     fetchData();
-  }, [activeLeaderboardTab]); // Re-run effect when the tab changes
+  }, [activeLeaderboardTab, offset, itemsPerPage]); // Re-run effect when the tab changes
 
   const renderedContent = (
     <div className="space-y-3">
+      <div className="flex justify-end">
+        <EntriesPerPageSelect value={itemsPerPage} onChange={setItemsPerPage} />
+      </div>
       {isLoading && data.length === 0
         ? Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-[74px] w-full" />
@@ -175,7 +186,6 @@ export function Leaderboard({ onSearch }: { onSearch: OnSearchHandler }) {
               entry={entry}
               pageInfoMap={pageInfoMap}
               onSearch={onSearch}
-              scrollPositions={scrollPositions}
             />
           ))}
     </div>
@@ -192,7 +202,7 @@ export function Leaderboard({ onSearch }: { onSearch: OnSearchHandler }) {
           Top performers in Wikipedia path discovery
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         <Tabs
           value={activeLeaderboardTab}
           onValueChange={(value) =>
@@ -219,6 +229,7 @@ export function Leaderboard({ onSearch }: { onSearch: OnSearchHandler }) {
             {renderedContent}
           </TabsContent>
         </Tabs>
+        {renderPagination(totalPages, currentPage, setCurrentPage)}
       </CardContent>
     </Card>
   );

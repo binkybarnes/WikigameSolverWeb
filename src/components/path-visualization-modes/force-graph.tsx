@@ -43,7 +43,9 @@ function buildDepthGroups(nodes: { id: string; depth?: number }[]) {
   return groups;
 }
 
-function buildAdjacency(links: { source: string | { id: string }; target: string | { id: string } }[]) {
+function buildAdjacency(
+  links: { source: string | { id: string }; target: string | { id: string } }[],
+) {
   const out = new Map<string, Set<string>>();
   const inc = new Map<string, Set<string>>();
   for (const l of links) {
@@ -67,8 +69,11 @@ function median(arr: number[]) {
 function orderColumnsByMedian(
   depthGroups: Map<number, string[]>,
   depthOf: Map<string, number>,
-  { out, inc }: { out: Map<string, Set<string>>; inc: Map<string, Set<string>> },
-  sweeps = 2
+  {
+    out,
+    inc,
+  }: { out: Map<string, Set<string>>; inc: Map<string, Set<string>> },
+  sweeps = 2,
 ) {
   const maxDepth = Math.max(...depthGroups.keys());
   const order = new Map<number, string[]>();
@@ -80,8 +85,12 @@ function orderColumnsByMedian(
       const indexPrev = new Map(prev.map((id, i) => [id, i]));
       const cur = order.get(d)!;
       cur.sort((a, b) => {
-        const ma = median([...(inc.get(a) ?? [])].map((p) => indexPrev.get(p) ?? 0));
-        const mb = median([...(inc.get(b) ?? [])].map((p) => indexPrev.get(p) ?? 0));
+        const ma = median(
+          [...(inc.get(a) ?? [])].map((p) => indexPrev.get(p) ?? 0),
+        );
+        const mb = median(
+          [...(inc.get(b) ?? [])].map((p) => indexPrev.get(p) ?? 0),
+        );
         if (Number.isNaN(ma) && Number.isNaN(mb)) return 0;
         if (Number.isNaN(ma)) return 1;
         if (Number.isNaN(mb)) return -1;
@@ -94,8 +103,12 @@ function orderColumnsByMedian(
       const indexNext = new Map(next.map((id, i) => [id, i]));
       const cur = order.get(d)!;
       cur.sort((a, b) => {
-        const ma = median([...(out.get(a) ?? [])].map((c) => indexNext.get(c) ?? 0));
-        const mb = median([...(out.get(b) ?? [])].map((c) => indexNext.get(c) ?? 0));
+        const ma = median(
+          [...(out.get(a) ?? [])].map((c) => indexNext.get(c) ?? 0),
+        );
+        const mb = median(
+          [...(out.get(b) ?? [])].map((c) => indexNext.get(c) ?? 0),
+        );
         if (Number.isNaN(ma) && Number.isNaN(mb)) return 0;
         if (Number.isNaN(ma)) return 1;
         if (Number.isNaN(mb)) return -1;
@@ -115,7 +128,7 @@ function zoomToFit(
   height: number,
   nodeRadius = 14,
   marginX = 10,
-  marginY = 10
+  marginY = 10,
 ) {
   if (!nodes.length) return;
 
@@ -149,28 +162,45 @@ function zoomToFit(
     .call(zoom.transform as any, transform);
 }
 
-export function ForceGraph({ paths, pageInfo, searchTerm = "" }: D3ForceGraphProps) {
+export function ForceGraph({
+  paths,
+  pageInfo,
+  searchTerm = "",
+}: D3ForceGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
   const [hoveredNode, setHoveredNode] = useState<Node | null>(null);
   const [hoveredLink, setHoveredLink] = useState<Link | null>(null);
   const [showAllTitles, setShowAllTitles] = useState(true);
-  const [graphData, setGraphData] = useState<{ nodes: Node[]; links: Link[] }>({ nodes: [], links: [] });
+  const [graphData, setGraphData] = useState<{ nodes: Node[]; links: Link[] }>({
+    nodes: [],
+    links: [],
+  });
   const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
-  const initialPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
-  const zoomRef = useRef<d3.ZoomBehavior<HTMLCanvasElement, unknown> | null>(null);
-  const prevStructuralDataRef = useRef<{ nodeCount: number; linkCount: number; pathsLength: number }>({
+  const initialPositionsRef = useRef<Map<string, { x: number; y: number }>>(
+    new Map(),
+  );
+  const zoomRef = useRef<d3.ZoomBehavior<HTMLCanvasElement, unknown> | null>(
+    null,
+  );
+  const prevStructuralDataRef = useRef<{
+    nodeCount: number;
+    linkCount: number;
+    pathsLength: number;
+  }>({
     nodeCount: 0,
     linkCount: 0,
     pathsLength: 0,
   }); // used so toggling titles or filter graph shouldnt cause zoomtofit
-  const prevDimensionsRef = useRef<{ width: number; height: number }>(dimensions); // however dimensions changing
+  const prevDimensionsRef = useRef<{ width: number; height: number }>(
+    dimensions,
+  ); // however dimensions changing
 
   const startPageId = paths.length > 0 ? paths[0][0] : null;
   const endPageId = paths.length > 0 ? paths[0][paths[0].length - 1] : null;
-  const startPage = startPageId ? pageInfo[startPageId]?.title ?? null : null;
-  const endPage = endPageId ? pageInfo[endPageId]?.title ?? null : null;
+  const startPage = startPageId ? (pageInfo[startPageId]?.title ?? null) : null;
+  const endPage = endPageId ? (pageInfo[endPageId]?.title ?? null) : null;
 
   const getWikipediaUrl = (title: string) =>
     `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`;
@@ -203,7 +233,12 @@ export function ForceGraph({ paths, pageInfo, searchTerm = "" }: D3ForceGraphPro
         const linkKey = `${source}|${target}`;
         if (!linksSet.has(linkKey)) {
           linksSet.add(linkKey);
-          links.push({ source, target, fromPage: source.replace(/_/g, " "), toPage: target.replace(/_/g, " ") });
+          links.push({
+            source,
+            target,
+            fromPage: source.replace(/_/g, " "),
+            toPage: target.replace(/_/g, " "),
+          });
         }
       }
     });
@@ -224,10 +259,13 @@ export function ForceGraph({ paths, pageInfo, searchTerm = "" }: D3ForceGraphPro
       nodesMap.forEach((node, id) => {
         if (!node.isSearchMatch) {
           const isConnected = links.some((link) => {
-            const sourceId = typeof link.source === "string" ? link.source : link.source.id;
-            const targetId = typeof link.target === "string" ? link.target : link.target.id;
+            const sourceId =
+              typeof link.source === "string" ? link.source : link.source.id;
+            const targetId =
+              typeof link.target === "string" ? link.target : link.target.id;
             return (
-              (searchMatchNodes.has(sourceId) && targetId === id) || (searchMatchNodes.has(targetId) && sourceId === id)
+              (searchMatchNodes.has(sourceId) && targetId === id) ||
+              (searchMatchNodes.has(targetId) && sourceId === id)
             );
           });
           node.isSearchConnected = isConnected;
@@ -235,9 +273,12 @@ export function ForceGraph({ paths, pageInfo, searchTerm = "" }: D3ForceGraphPro
       });
 
       links.forEach((link) => {
-        const sourceId = typeof link.source === "string" ? link.source : link.source.id;
-        const targetId = typeof link.target === "string" ? link.target : link.target.id;
-        link.isSearchHighlighted = searchMatchNodes.has(sourceId) || searchMatchNodes.has(targetId);
+        const sourceId =
+          typeof link.source === "string" ? link.source : link.source.id;
+        const targetId =
+          typeof link.target === "string" ? link.target : link.target.id;
+        link.isSearchHighlighted =
+          searchMatchNodes.has(sourceId) || searchMatchNodes.has(targetId);
       });
     } else {
       nodesMap.forEach((node) => {
@@ -295,7 +336,12 @@ export function ForceGraph({ paths, pageInfo, searchTerm = "" }: D3ForceGraphPro
   }, []);
 
   useEffect(() => {
-    if (!canvasRef.current || !containerRef.current || graphData.nodes.length === 0) return;
+    if (
+      !canvasRef.current ||
+      !containerRef.current ||
+      graphData.nodes.length === 0
+    )
+      return;
 
     const canvas = canvasRef.current;
     const context = canvas.getContext("2d");
@@ -322,14 +368,22 @@ export function ForceGraph({ paths, pageInfo, searchTerm = "" }: D3ForceGraphPro
     const depthOf = new Map(graphData.nodes.map((n) => [n.id, n.depth ?? 0]));
     const depthGroupsIds = buildDepthGroups(graphData.nodes);
     const { out, inc } = buildAdjacency(graphData.links as any);
-    const orderedByDepth = orderColumnsByMedian(depthGroupsIds, depthOf, { out, inc }, 2);
+    const orderedByDepth = orderColumnsByMedian(
+      depthGroupsIds,
+      depthOf,
+      { out, inc },
+      2,
+    );
     const colHeights = new Map<number, number>();
-    for (const [d, ids] of orderedByDepth) colHeights.set(d, ids.length > 1 ? (ids.length - 1) * ROW_SPACING : 0);
+    for (const [d, ids] of orderedByDepth)
+      colHeights.set(d, ids.length > 1 ? (ids.length - 1) * ROW_SPACING : 0);
     const maxColH = Math.max(0, ...colHeights.values());
     const weights: number[] = [];
-    for (let d = 0; d <= maxDepth; d++) weights.push(1 + (maxColH > 0 ? (colHeights.get(d) ?? 0) / maxColH : 0));
+    for (let d = 0; d <= maxDepth; d++)
+      weights.push(1 + (maxColH > 0 ? (colHeights.get(d) ?? 0) / maxColH : 0));
     const weightSum = weights.reduce((a, b) => a + b, 0);
-    const usableW = maxColH > 0 ? maxColH * (width / height) : width - 2 * marginX;
+    const usableW =
+      maxColH > 0 ? maxColH * (width / height) : width - 2 * marginX;
     const xAtDepth = new Map<number, number>();
     let acc = 0;
     for (let d = 0; d <= maxDepth; d++) {
@@ -359,10 +413,20 @@ export function ForceGraph({ paths, pageInfo, searchTerm = "" }: D3ForceGraphPro
           .forceLink<Node, Link>(graphData.links)
           .id((d) => d.id)
           .distance(3000)
-          .strength(0.01)
+          .strength(0.01),
       )
-      .force("x", d3.forceX<Node>((d) => xAtDepth.get(d.depth ?? 0)!).strength(1.0))
-      .force("y", d3.forceY<Node>((d) => initialPositionsRef.current.get(d.id)?.y ?? height / 2).strength(1.0));
+      .force(
+        "x",
+        d3.forceX<Node>((d) => xAtDepth.get(d.depth ?? 0)!).strength(1.0),
+      )
+      .force(
+        "y",
+        d3
+          .forceY<Node>(
+            (d) => initialPositionsRef.current.get(d.id)?.y ?? height / 2,
+          )
+          .strength(1.0),
+      );
     simulationRef.current = simulation;
 
     // let currentTransform = d3.zoomIdentity;
@@ -461,8 +525,14 @@ export function ForceGraph({ paths, pageInfo, searchTerm = "" }: D3ForceGraphPro
       });
 
       const baseMax = 3.5;
-      const dynamicMax = Math.min(8, baseMax + Math.log10(graphData.nodes.length + 1)); // more nodes, bigger the label can scale to
-      const labelScale = Math.max(0.4, Math.min(dynamicMax, 1 / currentTransform.k));
+      const dynamicMax = Math.min(
+        8,
+        baseMax + Math.log10(graphData.nodes.length + 1),
+      ); // more nodes, bigger the label can scale to
+      const labelScale = Math.max(
+        0.4,
+        Math.min(dynamicMax, 1 / currentTransform.k),
+      );
       const effectiveFontSize = baseFontSize * labelScale;
       context.font = `bold ${effectiveFontSize}px ${baseFontFamily}`;
       context.textAlign = "center";
@@ -480,13 +550,23 @@ export function ForceGraph({ paths, pageInfo, searchTerm = "" }: D3ForceGraphPro
         if (shouldShowLabel) {
           const offset = (node.isStart || node.isEnd ? 14 : 10) + 5;
 
-          if (searchTerm.trim() && !node.isSearchMatch && !node.isStart && !node.isEnd) {
+          if (
+            searchTerm.trim() &&
+            !node.isSearchMatch &&
+            !node.isStart &&
+            !node.isEnd
+          ) {
             context.globalAlpha = 0.5;
           }
 
           context.fillText(node.name, node.x!, node.y! - offset);
 
-          if (searchTerm.trim() && !node.isSearchMatch && !node.isStart && !node.isEnd) {
+          if (
+            searchTerm.trim() &&
+            !node.isSearchMatch &&
+            !node.isStart &&
+            !node.isEnd
+          ) {
             context.globalAlpha = 1.0;
           }
         }
@@ -495,7 +575,9 @@ export function ForceGraph({ paths, pageInfo, searchTerm = "" }: D3ForceGraphPro
     };
     simulation.on("tick", drawGraph);
 
-    const findSubjectNode = (event: d3.D3DragEvent<HTMLCanvasElement, Node, Node> | PointerEvent) => {
+    const findSubjectNode = (
+      event: d3.D3DragEvent<HTMLCanvasElement, Node, Node> | PointerEvent,
+    ) => {
       // use the underlying native event if present (d3.drag/d3.zoom pass a wrapper)
       const srcEvent = event.sourceEvent || event;
       const [mx, my] = d3.pointer(srcEvent, canvas);
@@ -513,7 +595,12 @@ export function ForceGraph({ paths, pageInfo, searchTerm = "" }: D3ForceGraphPro
           const offset = (node.isStart || node.isEnd ? 14 : 10) + 5;
           const yTop = node.y! - offset - baseFontSize;
           const yBottom = node.y! - offset;
-          if (wx >= node.x! - textWidth && wx <= node.x! + textWidth && wy >= yTop && wy <= yBottom) {
+          if (
+            wx >= node.x! - textWidth &&
+            wx <= node.x! + textWidth &&
+            wy >= yTop &&
+            wy <= yBottom
+          ) {
             return node;
           }
         }
@@ -527,7 +614,9 @@ export function ForceGraph({ paths, pageInfo, searchTerm = "" }: D3ForceGraphPro
       .filter((event) => {
         const e = (event as any).sourceEvent || event;
         // only allow wheel or mousedown when NOT clicking a subject node
-        return e.type === "wheel" || (e.type === "mousedown" && !findSubjectNode(e));
+        return (
+          e.type === "wheel" || (e.type === "mousedown" && !findSubjectNode(e))
+        );
       })
       .on("zoom", (event) => {
         // currentTransform = event.transform;
@@ -543,16 +632,26 @@ export function ForceGraph({ paths, pageInfo, searchTerm = "" }: D3ForceGraphPro
     };
 
     const hasStructuralChanges =
-      prevStructuralDataRef.current.nodeCount !== currentStructuralData.nodeCount ||
-      prevStructuralDataRef.current.linkCount !== currentStructuralData.linkCount ||
-      prevStructuralDataRef.current.pathsLength !== currentStructuralData.pathsLength;
+      prevStructuralDataRef.current.nodeCount !==
+        currentStructuralData.nodeCount ||
+      prevStructuralDataRef.current.linkCount !==
+        currentStructuralData.linkCount ||
+      prevStructuralDataRef.current.pathsLength !==
+        currentStructuralData.pathsLength;
 
     const dimensionsChanged =
-      prevDimensionsRef.current.width !== dimensions.width || prevDimensionsRef.current.height !== dimensions.height;
+      prevDimensionsRef.current.width !== dimensions.width ||
+      prevDimensionsRef.current.height !== dimensions.height;
 
     if (hasStructuralChanges || dimensionsChanged) {
       if (canvasRef.current && zoomRef.current) {
-        zoomToFit(canvasRef.current, zoomRef.current, graphData.nodes, width, height);
+        zoomToFit(
+          canvasRef.current,
+          zoomRef.current,
+          graphData.nodes,
+          width,
+          height,
+        );
       }
     }
 
@@ -611,13 +710,24 @@ export function ForceGraph({ paths, pageInfo, searchTerm = "" }: D3ForceGraphPro
         const threshold = 10 / currentTransform.k;
         for (const link of graphData.links) {
           const p: [number, number] = [wx, wy];
-          const a: [number, number] = [(link.source as Node).x!, (link.source as Node).y!];
-          const b: [number, number] = [(link.target as Node).x!, (link.target as Node).y!];
+          const a: [number, number] = [
+            (link.source as Node).x!,
+            (link.source as Node).y!,
+          ];
+          const b: [number, number] = [
+            (link.target as Node).x!,
+            (link.target as Node).y!,
+          ];
           const l2 = (b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2;
           if (l2 === 0) continue;
-          let t = ((p[0] - a[0]) * (b[0] - a[0]) + (p[1] - a[1]) * (b[1] - a[1])) / l2;
+          let t =
+            ((p[0] - a[0]) * (b[0] - a[0]) + (p[1] - a[1]) * (b[1] - a[1])) /
+            l2;
           t = Math.max(0, Math.min(1, t));
-          const dist = Math.hypot(p[0] - (a[0] + t * (b[0] - a[0])), p[1] - (a[1] + t * (b[1] - a[1])));
+          const dist = Math.hypot(
+            p[0] - (a[0] + t * (b[0] - a[0])),
+            p[1] - (a[1] + t * (b[1] - a[1])),
+          );
           if (dist < threshold && dist < minDistance) {
             minDistance = dist;
             foundLink = link;
@@ -653,13 +763,23 @@ export function ForceGraph({ paths, pageInfo, searchTerm = "" }: D3ForceGraphPro
       const threshold = 10 / currentTransform.k;
       for (const link of graphData.links) {
         const p: [number, number] = [wx, wy];
-        const a: [number, number] = [(link.source as Node).x!, (link.source as Node).y!];
-        const b: [number, number] = [(link.target as Node).x!, (link.target as Node).y!];
+        const a: [number, number] = [
+          (link.source as Node).x!,
+          (link.source as Node).y!,
+        ];
+        const b: [number, number] = [
+          (link.target as Node).x!,
+          (link.target as Node).y!,
+        ];
         const l2 = (b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2;
         if (l2 === 0) continue;
-        let t = ((p[0] - a[0]) * (b[0] - a[0]) + (p[1] - a[1]) * (b[1] - a[1])) / l2;
+        let t =
+          ((p[0] - a[0]) * (b[0] - a[0]) + (p[1] - a[1]) * (b[1] - a[1])) / l2;
         t = Math.max(0, Math.min(1, t));
-        const dist = Math.hypot(p[0] - (a[0] + t * (b[0] - a[0])), p[1] - (a[1] + t * (b[1] - a[1])));
+        const dist = Math.hypot(
+          p[0] - (a[0] + t * (b[0] - a[0])),
+          p[1] - (a[1] + t * (b[1] - a[1])),
+        );
         if (dist < threshold && dist < minDistance) {
           minDistance = dist;
           foundLink = link;
@@ -697,7 +817,13 @@ export function ForceGraph({ paths, pageInfo, searchTerm = "" }: D3ForceGraphPro
         }
       });
       if (canvasRef.current && zoomRef.current) {
-        zoomToFit(canvasRef.current, zoomRef.current, graphData.nodes, dimensions.width, dimensions.height);
+        zoomToFit(
+          canvasRef.current,
+          zoomRef.current,
+          graphData.nodes,
+          dimensions.width,
+          dimensions.height,
+        );
       }
       simulationRef.current.alpha(1).restart();
     }
@@ -706,30 +832,35 @@ export function ForceGraph({ paths, pageInfo, searchTerm = "" }: D3ForceGraphPro
   const toggleTitleVisibility = () => setShowAllTitles((v) => !v);
 
   return (
-    <div className="space-y-4 flex-1 flex flex-col">
+    <div className="flex flex-1 flex-col space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Badge variant="outline" className="text-xs">
-            {graphData.nodes.length} nodes • {graphData.links.length} connections
+            {graphData.nodes.length} nodes • {graphData.links.length}{" "}
+            connections
           </Badge>
-          {graphData.nodes.length > 100 && (
+          {/* {graphData.nodes.length > 100 && (
             <Badge variant="secondary" className="text-xs">
               Large dataset - rendered with Canvas
             </Badge>
-          )}
+          )} */}
           {searchTerm.trim() && (
-            <Badge className="bg-amber-500 hover:bg-amber-600 text-white text-xs">
+            <Badge className="bg-amber-500 text-xs text-white hover:bg-amber-600">
               {graphData.nodes.filter((n) => n.isSearchMatch).length} matches
             </Badge>
           )}
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={toggleTitleVisibility}>
-            {showAllTitles ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            {showAllTitles ? (
+              <EyeOff className="h-4 w-4" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
             <span className="ml-1 text-xs">Titles</span>
           </Button>
           <Button variant="outline" size="sm" onClick={handleReset}>
-            <RotateCcw className="w-4 h-4" />
+            <RotateCcw className="h-4 w-4" />
             <span className="ml-1 text-xs">Reset</span>
           </Button>
         </div>
@@ -737,14 +868,14 @@ export function ForceGraph({ paths, pageInfo, searchTerm = "" }: D3ForceGraphPro
       <div className="relative flex-1">
         <div
           ref={containerRef}
-          className="h-full min-h-[500px] bg-background border rounded-lg overflow-hidden touch-none"
+          className="bg-background h-full min-h-[500px] touch-none overflow-hidden rounded-lg border"
         >
           <canvas ref={canvasRef} />
         </div>
         {hoveredNode && (
-          <div className="absolute top-4 left-4 bg-background/95 backdrop-blur-sm border rounded-lg p-3 shadow-lg max-w-xs z-10 pointer-events-none">
-            <div className="font-medium text-sm">{hoveredNode.name}</div>
-            <div className="text-xs text-muted-foreground mt-1">
+          <div className="bg-background/95 pointer-events-none absolute top-4 left-4 z-10 max-w-xs rounded-lg border p-3 shadow-lg backdrop-blur-sm">
+            <div className="text-sm font-medium">{hoveredNode.name}</div>
+            <div className="text-muted-foreground mt-1 text-xs">
               {hoveredNode.isStart && "Start page • "}
               {hoveredNode.isEnd && "Goal page • "}
               {hoveredNode.isSearchMatch && "Search match • "}
@@ -753,15 +884,19 @@ export function ForceGraph({ paths, pageInfo, searchTerm = "" }: D3ForceGraphPro
           </div>
         )}
         {hoveredLink && !hoveredNode && (
-          <div className="absolute top-4 right-4 bg-background/95 backdrop-blur-sm border rounded-lg p-3 shadow-lg max-w-xs z-10 pointer-events-none">
-            <div className="font-medium text-sm">
+          <div className="bg-background/95 pointer-events-none absolute top-4 right-4 z-10 max-w-xs rounded-lg border p-3 shadow-lg backdrop-blur-sm">
+            <div className="text-sm font-medium">
               {hoveredLink.fromPage} → {hoveredLink.toPage}
             </div>
-            <div className="text-xs text-muted-foreground mt-1">Connection between pages</div>
+            <div className="text-muted-foreground mt-1 text-xs">
+              Connection between pages
+            </div>
           </div>
         )}
-        <div className="absolute bottom-4 right-4 bg-background/90 backdrop-blur-sm rounded-lg p-2 border pointer-events-none">
-          <div className="text-xs text-muted-foreground">Drag nodes • Pan & zoom • Click to visit Wikipedia</div>
+        <div className="bg-background/90 pointer-events-none absolute right-4 bottom-4 rounded-lg border p-2 backdrop-blur-sm">
+          <div className="text-muted-foreground text-xs">
+            Drag nodes • Pan & zoom • Click to visit Wikipedia
+          </div>
         </div>
       </div>
     </div>

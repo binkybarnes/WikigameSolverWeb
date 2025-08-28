@@ -19,7 +19,11 @@ const API_PAGE_ID_LIMIT = 50;
  * @param backoff - Initial backoff delay in ms for retries.
  * @returns A promise that resolves to a PageInfoMap for the given batch.
  */
-async function fetchPageInfoBatch(pageIds: number[], retries = 3, backoff = 500): Promise<PageInfoMap> {
+async function fetchPageInfoBatch(
+  pageIds: number[],
+  retries = 3,
+  backoff = 500,
+): Promise<PageInfoMap> {
   const url = "https://en.wikipedia.org/w/api.php";
   const params = new URLSearchParams({
     action: "query",
@@ -29,14 +33,19 @@ async function fetchPageInfoBatch(pageIds: number[], retries = 3, backoff = 500)
     piprop: "thumbnail",
     pithumbsize: "200", // 200px is a good size for thumbnails
     origin: "*", // Required for CORS
+    redirects: "1",
   });
 
   try {
-    const res = await fetch(`${url}?${params.toString()}`, { cache: "force-cache" });
+    const res = await fetch(`${url}?${params.toString()}`, {
+      cache: "force-cache",
+    });
 
     // Handle rate limiting (429) with exponential backoff
     if (res.status === 429 && retries > 0) {
-      console.warn(`Rate limited. Retrying in ${backoff}ms... (${retries} retries left)`);
+      console.warn(
+        `Rate limited. Retrying in ${backoff}ms... (${retries} retries left)`,
+      );
       await new Promise((resolve) => setTimeout(resolve, backoff));
       return fetchPageInfoBatch(pageIds, retries - 1, backoff * 2);
     }
@@ -48,15 +57,64 @@ async function fetchPageInfoBatch(pageIds: number[], retries = 3, backoff = 500)
     const data = await res.json();
     const pages = data.query?.pages || {};
 
-    // Use reduce to transform the API response into our desired PageInfoMap structure
-    const pageInfoMap: PageInfoMap = Object.values(pages).reduce((acc: PageInfoMap, page: any) => {
-      acc[page.pageid] = {
-        title: page.title,
-        description: page.description ?? "No description available.",
-        thumbnailUrl: page.thumbnail?.source ?? null,
+    const pageInfoMap: PageInfoMap = {};
+    const titleToPageId: Record<string, number> = {};
+
+    for (const p of Object.values<any>(pages)) {
+      // Some pages can be missing (e.g. -1) — guard against that?
+      if (!p || !p.pageid) continue;
+      pageInfoMap[p.pageid] = {
+        title: p.title,
+        description: p.description ?? "No description available.",
+        thumbnailUrl: p.thumbnail?.source ?? null,
       };
-      return acc;
-    }, {});
+      titleToPageId[p.title] = p.pageid;
+    }
+
+    // Handle redirects
+    if (
+      Array.isArray(data.query?.redirects) &&
+      data.query.redirects.length > 0
+    ) {
+      const redirectTitles = data.query.redirects.map((r: any) => r.from);
+
+      // Second fetch: resolve redirect titles → pageids
+      const infoParams = new URLSearchParams({
+        action: "query",
+        format: "json",
+        titles: redirectTitles.join("|"),
+        prop: "info",
+        origin: "*",
+      });
+
+      const infoRes = await fetch(`${url}?${infoParams.toString()}`);
+      const infoData = await infoRes.json();
+      const infoPages = infoData.query?.pages || {};
+
+      // Map each redirect id → its target info
+      for (const r of data.query.redirects) {
+        const fromTitle: string = r.from;
+        const toTitle: string = r.to;
+        const targetPageId = titleToPageId[toTitle];
+        if (!targetPageId) continue;
+
+        // Find the redirect pageid from infoData
+        const redirectPage = Object.values<any>(infoPages).find(
+          (p: any) => p.title === fromTitle,
+        );
+        if (!redirectPage) continue;
+
+        const redirectPageId = redirectPage.pageid;
+
+        // Add redirect entry pointing to target's info
+        const targetInfo = pageInfoMap[targetPageId];
+
+        pageInfoMap[redirectPageId] = {
+          ...targetInfo,
+          title: fromTitle, // keep the redirect’s title
+        };
+      }
+    }
 
     return pageInfoMap;
   } catch (error) {
@@ -72,7 +130,9 @@ async function fetchPageInfoBatch(pageIds: number[], retries = 3, backoff = 500)
  * @param uniquePageIds - An array of unique Wikipedia page IDs.
  * @returns A promise that resolves to a single PageInfoMap containing all requested pages.
  */
-export async function createPageInfoMap(uniquePageIds: number[]): Promise<PageInfoMap> {
+export async function createPageInfoMap(
+  uniquePageIds: number[],
+): Promise<PageInfoMap> {
   const chunks: number[][] = [];
 
   // Split the IDs into chunks of the appropriate size

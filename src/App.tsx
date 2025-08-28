@@ -285,7 +285,7 @@ export default function WikipediaPathFinder() {
         </div>
       </header>
 
-      <main className="container mx-auto max-w-6xl px-4 py-8">
+      <main className="max-w-8xl container mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="mb-8 grid w-full grid-cols-2">
             <TabsTrigger
@@ -412,7 +412,7 @@ export default function WikipediaPathFinder() {
                       </div>
                       <div>
                         <div className="text-foreground font-mono text-3xl font-bold">
-                          {searchResults.pathLength}
+                          {searchResults.pathLength - 1}
                         </div>
                         <div className="text-muted-foreground text-lg">
                           Steps per Path
@@ -446,11 +446,11 @@ export default function WikipediaPathFinder() {
                 <div>
                   <CardTitle className="flex items-center gap-2 font-mono text-xl">
                     <ArrowRight className="text-primary h-5 w-5" />
-                    Paths Visualization
+                    All shortest paths will appear here
                   </CardTitle>
-                  <CardDescription className="text-base">
+                  {/* <CardDescription className="text-base">
                     All shortest paths between articles will appear here
-                  </CardDescription>
+                  </CardDescription> */}
                 </div>
 
                 {/* Fullscreen button */}
@@ -478,7 +478,7 @@ export default function WikipediaPathFinder() {
             </Card>
 
             {/* Status Bar */}
-            <div className="text-muted-foreground bg-card/50 border-border flex items-center justify-between rounded-lg border px-4 py-2 text-sm">
+            {/* <div className="text-muted-foreground bg-card/50 border-border flex items-center justify-between rounded-lg border px-4 py-2 text-sm">
               <div className="flex items-center gap-4">
                 <span>Ready</span>
                 <span>•</span>
@@ -488,10 +488,10 @@ export default function WikipediaPathFinder() {
                 <div className="bg-primary h-2 w-2 animate-pulse rounded-full" />
                 <span>Live</span>
               </div>
-            </div>
+            </div> */}
           </TabsContent>
 
-          <TabsContent value="leaderboard" forceMount>
+          <TabsContent value="leaderboard">
             <Leaderboard onSearch={handleLeaderboardSearch} />
           </TabsContent>
         </Tabs>

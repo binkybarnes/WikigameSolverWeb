@@ -94,9 +94,12 @@ export default function WikipediaPathFinder() {
 
   const outputAsIds = true;
 
-  const handleSearch = async () => {
-    const startPageNormal = startPage.trim().replaceAll(" ", "_");
-    const endPageNormal = endPage.trim().replaceAll(" ", "_");
+  const handleSearch = async (startOverride?: string, endOverride?: string) => {
+    const startPageToUse = startOverride || startPage;
+    const endPageToUse = endOverride || endPage;
+
+    const startPageNormal = startPageToUse.trim().replaceAll(" ", "_");
+    const endPageNormal = endPageToUse.trim().replaceAll(" ", "_");
 
     if (!startPageNormal || !endPageNormal) return;
     setIsSearching(true);
@@ -192,6 +195,21 @@ export default function WikipediaPathFinder() {
     } finally {
       setIsSearching(false);
     }
+  };
+
+  const handleLeaderboardSearch = (startTitle: string, endTitle: string) => {
+    // 1. Switch to the finder tab
+    setActiveTab("finder");
+
+    // 2. Set the input fields' state
+    setStartPage(startTitle);
+    setEndPage(endTitle);
+
+    // 3. Trigger the search with the new values
+    handleSearch(startTitle, endTitle);
+
+    // Optional: Scroll to the top of the page
+    window.scrollTo({ top: 0, behavior: "instant" });
   };
 
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -334,7 +352,7 @@ export default function WikipediaPathFinder() {
                 </div>
 
                 <Button
-                  onClick={handleSearch}
+                  onClick={() => handleSearch()}
                   disabled={!startPage.trim() || !endPage.trim() || isSearching}
                   className="bg-primary hover:bg-primary/90 text-primary-foreground w-full px-6 py-3 text-base font-medium transition-all duration-200 md:w-auto"
                 >
@@ -473,8 +491,8 @@ export default function WikipediaPathFinder() {
             </div>
           </TabsContent>
 
-          <TabsContent value="leaderboard">
-            <Leaderboard />
+          <TabsContent value="leaderboard" forceMount>
+            <Leaderboard onSearch={handleLeaderboardSearch} />
           </TabsContent>
         </Tabs>
       </main>
@@ -494,3 +512,5 @@ export default function WikipediaPathFinder() {
     </div>
   );
 }
+
+// TODO: make switching to leaderboard keep scroll position, and also when clicking on leaderboard row should save scroll position.

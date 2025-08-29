@@ -14,7 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Trophy, Target, TrendingUp, ArrowRight } from "lucide-react";
+import { Trophy, Target, TrendingUp, ArrowRight, Merge } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 // Assuming these are defined elsewhere
@@ -194,12 +194,12 @@ export function Leaderboard({ onSearch }: { onSearch: OnSearchHandler }) {
   return (
     <Card className="shadow-sm">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 font-mono">
-          <Trophy className="text-primary h-5 w-5" />
+        <CardTitle className="flex items-center gap-2 font-mono text-2xl">
+          <Trophy className="text-primary h-6 w-6" />
           Leaderboards
         </CardTitle>
         <CardDescription>
-          Top performers in Wikipedia path discovery
+          Collaborative effort towards discovering Wikipedia paths
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -211,12 +211,18 @@ export function Leaderboard({ onSearch }: { onSearch: OnSearchHandler }) {
           className="w-full"
         >
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="longest" className="flex items-center gap-2">
-              <Target className="h-4 w-4" />
+            <TabsTrigger
+              value="longest"
+              className="flex items-center gap-2 text-lg"
+            >
+              <ArrowRight className="h-4 w-4" />
               Longest Paths
             </TabsTrigger>
-            <TabsTrigger value="most" className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
+            <TabsTrigger
+              value="most"
+              className="flex items-center gap-2 text-lg"
+            >
+              <Merge className="h-4 w-4" />
               Most Paths
             </TabsTrigger>
           </TabsList>

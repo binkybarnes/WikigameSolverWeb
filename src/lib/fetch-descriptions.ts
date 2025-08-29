@@ -1,3 +1,5 @@
+import axios from "axios";
+
 // Define the structure for a single page's information
 export interface PageInfo {
   title: string;
@@ -37,11 +39,12 @@ async function fetchPageInfoBatch(
   });
 
   try {
-    const res = await fetch(`${url}?${params.toString()}`, {
-      cache: "force-cache",
+    const res = await axios.get(url, {
+      params,
+      timeout: 5000,
+      validateStatus: () => true, // handle non-2xx manually
     });
 
-    // Handle rate limiting (429) with exponential backoff
     if (res.status === 429 && retries > 0) {
       console.warn(
         `Rate limited. Retrying in ${backoff}ms... (${retries} retries left)`,
@@ -50,11 +53,11 @@ async function fetchPageInfoBatch(
       return fetchPageInfoBatch(pageIds, retries - 1, backoff * 2);
     }
 
-    if (!res.ok) {
+    if (res.status < 200 || res.status >= 300) {
       throw new Error(`HTTP error! status: ${res.status}`);
     }
 
-    const data = await res.json();
+    const data = await res.data;
     const pages = data.query?.pages || {};
 
     const pageInfoMap: PageInfoMap = {};
@@ -79,16 +82,18 @@ async function fetchPageInfoBatch(
       const redirectTitles = data.query.redirects.map((r: any) => r.from);
 
       // Second fetch: resolve redirect titles → pageids
-      const infoParams = new URLSearchParams({
-        action: "query",
-        format: "json",
-        titles: redirectTitles.join("|"),
-        prop: "info",
-        origin: "*",
+      const infoRes = await axios.get(url, {
+        params: {
+          action: "query",
+          format: "json",
+          titles: redirectTitles.join("|"),
+          prop: "info",
+          origin: "*",
+        },
       });
 
-      const infoRes = await fetch(`${url}?${infoParams.toString()}`);
-      const infoData = await infoRes.json();
+      // Axios automatically parses JSON
+      const infoData = infoRes.data;
       const infoPages = infoData.query?.pages || {};
 
       // Map each redirect id → its target info

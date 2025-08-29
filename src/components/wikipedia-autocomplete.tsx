@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Search } from "lucide-react";
+import axios from "axios";
 
 interface WikipediaThumbnail {
   url: string;
@@ -32,7 +33,13 @@ interface WikipediaAutocompleteProps {
   className?: string;
 }
 
-export function WikipediaAutocomplete({ id, placeholder, value, onChange, className }: WikipediaAutocompleteProps) {
+export function WikipediaAutocomplete({
+  id,
+  placeholder,
+  value,
+  onChange,
+  className,
+}: WikipediaAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<WikipediaSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -41,7 +48,7 @@ export function WikipediaAutocomplete({ id, placeholder, value, onChange, classN
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<NodeJS.Timeout>();
 
-  const SUGGESTION_LIMIT = 10;
+  const SUGGESTION_LIMIT = 8;
   const fetchSuggestions = async (query: string) => {
     if (query.length < 2) {
       setSuggestions([]);
@@ -50,13 +57,21 @@ export function WikipediaAutocomplete({ id, placeholder, value, onChange, classN
     }
 
     setIsLoading(true);
+
     try {
-      const response = await fetch(
-        `https://en.wikipedia.org/w/rest.php/v1/search/title?q=${encodeURIComponent(query)}&limit=${SUGGESTION_LIMIT}`
+      const response = await axios.get(
+        `https://en.wikipedia.org/w/rest.php/v1/search/title`,
+        {
+          params: {
+            q: query,
+            limit: SUGGESTION_LIMIT,
+          },
+        },
       );
-      const data = await response.json();
-      setSuggestions(data.pages || []);
-      console.log(data);
+
+      // Axios automatically parses JSON
+      setSuggestions(response.data.pages || []);
+      console.log(response.data);
       setShowSuggestions(true);
       setSelectedIndex(-1);
     } catch (error) {
@@ -95,7 +110,9 @@ export function WikipediaAutocomplete({ id, placeholder, value, onChange, classN
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault();
-        setSelectedIndex((prev) => (prev < suggestions.length - 1 ? prev + 1 : prev));
+        setSelectedIndex((prev) =>
+          prev < suggestions.length - 1 ? prev + 1 : prev,
+        );
         break;
       case "ArrowUp":
         e.preventDefault();
@@ -149,8 +166,8 @@ export function WikipediaAutocomplete({ id, placeholder, value, onChange, classN
           autoComplete="off"
         />
         {isLoading && (
-          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-            <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+          <div className="absolute top-1/2 right-3 -translate-y-1/2 transform">
+            <div className="border-muted-foreground/30 border-t-muted-foreground h-4 w-4 animate-spin rounded-full border-2" />
           </div>
         )}
       </div>
@@ -158,29 +175,34 @@ export function WikipediaAutocomplete({ id, placeholder, value, onChange, classN
       {showSuggestions && suggestions.length > 0 && (
         <Card
           ref={suggestionsRef}
-          className="p-0 absolute top-full left-0 right-0 z-50 mt-1 border border-border bg-popover shadow-lg"
+          className="border-border bg-popover absolute top-full right-0 left-0 z-50 mt-1 border p-0 shadow-lg"
         >
           <div className="p-1">
             {suggestions.map((suggestion, index) => (
               <div
                 key={suggestion.id}
                 onClick={() => handleSuggestionClick(suggestion)}
-                className={`
-                  flex items-start gap-3 p-1 rounded-md cursor-pointer transition-colors
-                  ${index === selectedIndex ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"}
-                `}
+                className={`flex cursor-pointer items-start gap-3 rounded-md p-1 transition-colors ${index === selectedIndex ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"} `}
               >
-                <div className="flex-shrink-0 w-14 h-14 bg-muted rounded-md flex items-center justify-center">
+                <div className="bg-muted flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-md">
                   {suggestion.thumbnail ? (
-                    <img src={suggestion.thumbnail?.url} alt="" className="w-12 h-12 rounded object-contain" />
+                    <img
+                      src={suggestion.thumbnail?.url}
+                      alt=""
+                      className="h-12 w-12 rounded object-contain"
+                    />
                   ) : (
-                    <Search className="w-6 h-6 text-muted-foreground" />
+                    <Search className="text-muted-foreground h-6 w-6" />
                   )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm truncate">{suggestion.title}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-base font-medium">
+                    {suggestion.title}
+                  </div>
                   {suggestion.description && (
-                    <div className="text-xs text-muted-foreground truncate mt-1">{suggestion.description}</div>
+                    <div className="text-muted-foreground mt-1 truncate text-sm">
+                      {suggestion.description}
+                    </div>
                   )}
                 </div>
               </div>

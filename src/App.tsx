@@ -23,7 +23,11 @@ import {
   LogOut,
   Settings,
   User,
+  Merge,
+  Github,
 } from "lucide-react";
+import { FaGithub } from "react-icons/fa";
+
 import { Maximize, Minimize } from "lucide-react";
 
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -35,6 +39,7 @@ import { formatComputeTime, type UserType } from "./lib/utils";
 import { UserDropdown } from "./components/user-dropdown";
 import SignInModal from "./components/sign-in-modal";
 import ChangeUsernameModal from "./components/change-username-modal";
+import axios from "axios";
 
 export default function WikipediaPathFinder() {
   const [startPage, setStartPage] = useState("");
@@ -58,7 +63,6 @@ export default function WikipediaPathFinder() {
   const [isChangeUsernameModalOpen, setIsChangeUsernameModalOpen] =
     useState(false);
 
-  type Provider = "guest" | "google";
   const [user, setUser] = useState<UserType | null>(null);
 
   const API_URL = import.meta.env.VITE_API_URL;
@@ -67,23 +71,25 @@ export default function WikipediaPathFinder() {
   useEffect(() => {
     async function loadMe() {
       try {
-        const res = await fetch(`${API_URL}/me`, {
-          method: "GET",
-          credentials: "include",
+        const res = await axios.get(`${API_URL}/me`, {
+          withCredentials: true, // same as credentials: 'include'
         });
-        if (res.ok) {
-          const json = await res.json();
-          setUser({
-            userId: json.user_id,
-            username: json.username,
-            provider: json.provider,
-          });
-          console.log(json);
+
+        // Axios automatically parses JSON
+        setUser({
+          userId: res.data.user_id,
+          username: res.data.username,
+          provider: res.data.provider,
+        });
+        console.log(res.data);
+      } catch (e: any) {
+        if (e.response) {
+          // server responded with a status other than 2xx
+          console.error("me failed:", e.response.data);
         } else {
-          console.error("me failed:", await res.text());
+          // network error or other
+          console.error("failed to /me", e);
         }
-      } catch (e) {
-        console.error("failed to /me", e);
       }
     }
 
@@ -128,43 +134,36 @@ export default function WikipediaPathFinder() {
     }
 
     try {
-      const response = await fetch(`${API_URL}/search`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept-Encoding": "gzip, deflate, br",
-        },
-        body: JSON.stringify({
+      const response = await axios.post(
+        `${API_URL}/search`,
+        {
           start: startPageNormal,
           end: endPageNormal,
           output_as_ids: outputAsIds,
-        }),
-        credentials: "include",
-      });
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "Accept-Encoding": "gzip, deflate, br",
+          },
+          withCredentials: true, // same as credentials: "include"
+          validateStatus: () => true, // handle status manually
+        },
+      );
 
-      if (!response.ok) {
-        if (response.status === 429) {
-          setError(
-            "Rate limit exceeded! Please wait before making another request.",
-          );
-          return;
-        }
-
-        try {
-          const data = await response.json();
-          if (data.error) {
-            setError(data.error);
-          } else {
-            setError(`HTTP error: ${response.status}`);
-          }
-        } catch {
-          setError(`HTTP error: ${response.status}`);
-        }
-
+      if (response.status === 429) {
+        setError(
+          "Rate limit exceeded! Please wait before making another request.",
+        );
         return;
       }
 
-      const data = await response.json();
+      if (response.status < 200 || response.status >= 300) {
+        setError(response.data?.error || `HTTP error: ${response.status}`);
+        return;
+      }
+
+      const data = response.data;
       searchCache.current.set(etag, data);
 
       console.log("Search result:", data);
@@ -175,7 +174,7 @@ export default function WikipediaPathFinder() {
         computeTime: data.elapsed_s,
       });
 
-      // 🔥 fetch page info right here
+      // 🔥 fetch page info
       const allPageIds = data.paths.flat();
       const uniquePageIds = [...new Set(allPageIds)];
 
@@ -273,6 +272,16 @@ export default function WikipediaPathFinder() {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <a
+                href="https://github.com/binkybarnes/WikigameSolver"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <div className="hover:bg-muted flex h-9 w-9 cursor-pointer items-center justify-center rounded transition-colors">
+                  <FaGithub className="h-6 w-6" />
+                </div>
+              </a>
+
               <ThemeToggle />
               <UserDropdown
                 user={user}
@@ -322,31 +331,31 @@ export default function WikipediaPathFinder() {
                   <div className="space-y-2">
                     <label
                       htmlFor="start-page"
-                      className="text-foreground text-xl font-medium"
+                      className="text-foreground text-lg font-medium"
                     >
                       Start Page
                     </label>
                     <WikipediaAutocomplete
                       id="start-page"
-                      placeholder="e.g., Albert Einstein"
+                      placeholder="e.g., Italian brainrot"
                       value={startPage}
                       onChange={setStartPage}
-                      className="bg-input border-border focus:ring-primary/20 focus:border-primary mt-2 text-base transition-colors"
+                      className="bg-input border-border focus:ring-primary/20 focus:border-primary mt-2 h-12 text-2xl transition-colors"
                     />
                   </div>
                   <div className="space-y-2">
                     <label
                       htmlFor="end-page"
-                      className="text-foreground text-xl font-medium"
+                      className="text-foreground text-lg font-medium"
                     >
                       End Page
                     </label>
                     <WikipediaAutocomplete
                       id="end-page"
-                      placeholder="e.g., Quantum Physics"
+                      placeholder="e.g., Fast inverse square root"
                       value={endPage}
                       onChange={setEndPage}
-                      className="bg-input border-border focus:ring-primary/20 focus:border-primary auto mt-2 text-base transition-colors"
+                      className="bg-input border-border focus:ring-primary/20 focus:border-primary auto mt-2 h-12 text-2xl transition-colors"
                     />
                   </div>
                 </div>
@@ -392,22 +401,6 @@ export default function WikipediaPathFinder() {
                   <div className="flex items-center justify-center gap-8 text-center">
                     <div className="flex items-center gap-3">
                       <div className="bg-primary/10 flex h-12 w-12 items-center justify-center rounded-full">
-                        <Target className="text-primary h-6 w-6" />
-                      </div>
-                      <div>
-                        <div className="text-foreground font-mono text-3xl font-bold">
-                          {searchResults.pathCount}
-                        </div>
-                        <div className="text-muted-foreground text-lg">
-                          Shortest Paths Found
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-border h-16 w-px" />
-
-                    <div className="flex items-center gap-3">
-                      <div className="bg-primary/10 flex h-12 w-12 items-center justify-center rounded-full">
                         <ArrowRight className="text-primary h-6 w-6" />
                       </div>
                       <div>
@@ -416,6 +409,22 @@ export default function WikipediaPathFinder() {
                         </div>
                         <div className="text-muted-foreground text-lg">
                           Steps per Path
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-border h-16 w-px" />
+
+                    <div className="flex items-center gap-3">
+                      <div className="bg-primary/10 flex h-12 w-12 items-center justify-center rounded-full">
+                        <Merge className="text-primary h-6 w-6" />
+                      </div>
+                      <div>
+                        <div className="text-foreground font-mono text-3xl font-bold">
+                          {searchResults.pathCount}
+                        </div>
+                        <div className="text-muted-foreground text-lg">
+                          Paths Found
                         </div>
                       </div>
                     </div>
@@ -444,7 +453,7 @@ export default function WikipediaPathFinder() {
             <Card ref={wrapperRef} className="shadow-sm">
               <CardHeader className="flex items-start justify-between">
                 <div>
-                  <CardTitle className="flex items-center gap-2 font-mono text-xl">
+                  <CardTitle className="text-md flex items-center gap-2 font-mono">
                     <ArrowRight className="text-primary h-5 w-5" />
                     All shortest paths will appear here
                   </CardTitle>

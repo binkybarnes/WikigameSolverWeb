@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { RotateCcw, Eye, EyeOff } from "lucide-react";
 import * as d3 from "d3";
 import type { PageInfoMap } from "@/lib/fetch-descriptions";
+import { useTheme } from "next-themes";
 
 interface Node extends d3.SimulationNodeDatum {
   id: string;
@@ -167,6 +168,8 @@ export function ForceGraph({
   pageInfo,
   searchTerm = "",
 }: D3ForceGraphProps) {
+  const { theme } = useTheme();
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
@@ -291,7 +294,7 @@ export function ForceGraph({
     }
 
     setGraphData({ nodes: Array.from(nodesMap.values()), links });
-  }, [paths, startPage, endPage, searchTerm]);
+  }, [paths, startPage, endPage, searchTerm, pageInfo]);
 
   useEffect(() => {
     // Handler for the stubborn fullscreen exit - this is our primary fix.
@@ -441,10 +444,15 @@ export function ForceGraph({
       context.translate(currentTransform.x, currentTransform.y);
       context.scale(currentTransform.k, currentTransform.k);
 
-      const defaultLinkColor = "#64748b",
-        hoverLinkColor = "#06b6d4",
-        searchHighlightLinkColor = "#f59e0b",
-        dimmedLinkColor = "#94a3b8";
+      // const defaultLinkColor = "#64748b",
+      //   hoverLinkColor = "#06b6d4",
+      //   searchHighlightLinkColor = "#f59e0b",
+      //   dimmedLinkColor = "#94a3b8";
+
+      const defaultLinkColor = theme === "dark" ? "#cbd5e1" : "#64748b"; // lighter for dark mode
+      const hoverLinkColor = theme === "dark" ? "#22d3ee" : "#06b6d4";
+      const searchHighlightLinkColor = theme === "dark" ? "#facc15" : "#f59e0b";
+      const dimmedLinkColor = theme === "dark" ? "#a7b9d1" : "#94a3b8"; // maybe lighter variant if needed
 
       const hasSearchTerm = searchTerm.trim().length > 0;
 
@@ -803,7 +811,7 @@ export function ForceGraph({
       canvas.removeEventListener("click", handleClick);
       d3.select(canvas).on(".zoom", null).on(".drag", null);
     };
-  }, [graphData, dimensions, showAllTitles, searchTerm, paths.length]);
+  }, [graphData, dimensions, showAllTitles, searchTerm, paths.length, theme]);
 
   const handleReset = () => {
     if (simulationRef.current && initialPositionsRef.current.size > 0) {

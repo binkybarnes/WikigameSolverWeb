@@ -36,6 +36,11 @@ interface LeaderboardEntry {
   rank: number;
 }
 
+interface LeaderboardResponse {
+  entries: LeaderboardEntry[];
+  total: number; // total number of entries in this leaderboard
+}
+
 type LeaderboardType = "longest" | "most";
 type OnSearchHandler = (startTitle: string, endTitle: string) => void;
 
@@ -123,42 +128,78 @@ const LeaderboardRow = ({
 export function Leaderboard({ onSearch }: { onSearch: OnSearchHandler }) {
   const [activeLeaderboardTab, setActiveLeaderboardTab] =
     useState<LeaderboardType>("longest");
-  const [data, setData] = useState<LeaderboardEntry[]>([]);
+  const [data, setData] = useState<LeaderboardResponse>({
+    entries: [],
+    total: 0,
+  });
   const [pageInfoMap, setPageInfoMap] = useState<PageInfoMap>({});
   const [isLoading, setIsLoading] = useState(true);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
   const offset = (currentPage - 1) * itemsPerPage;
-  const totalPages = 5000 / itemsPerPage;
+  const totalPages = data.total / itemsPerPage;
 
-  const scrollPositions = useRef({ longest: 0, most: 0 });
+  // const scrollPositions = useRef({ longest: 0, most: 0 });
+
+  const dataCache = useRef<Record<string, LeaderboardResponse>>({});
+  const pageInfoMapCache = useRef<Record<string, PageInfoMap>>({});
+  const etagCache = useRef<Record<string, string>>({});
 
   useEffect(() => {
     const fetchData = async () => {
+      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+      const url = `${API_URL}/leaderboard/${activeLeaderboardTab}?offset=${offset}&limit=${itemsPerPage}`;
+
       try {
         setIsLoading(true);
 
-        const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+        // Prepare headers
+        const headers: Record<string, string> = {};
+        if (etagCache.current[url]) {
+          headers["If-None-Match"] = etagCache.current[url];
+        }
 
-        // 1. Fetch leaderboard data
-        const response = await axios.get<LeaderboardEntry[]>(
-          `${API_URL}/leaderboard/${activeLeaderboardTab}?offset=${offset}&limit=${itemsPerPage}`,
-        );
-        const leaderboardData = response.data;
-        setData(leaderboardData); // Set data immediately for responsive UI
-
-        // 2. Collect unique page IDs
-        const pageIds = new Set<number>();
-        leaderboardData.forEach((entry) => {
-          pageIds.add(entry.start_id);
-          pageIds.add(entry.end_id);
+        // Fetch leaderboard data
+        const response = await axios.get<LeaderboardResponse>(url, {
+          headers,
+          validateStatus: (status) => status === 200 || status === 304,
         });
 
-        // 3. Fetch all page info in parallel
-        if (pageIds.size > 0) {
-          const infoMap = await createPageInfoMap(Array.from(pageIds));
-          setPageInfoMap(infoMap);
+        if (response.status === 200) {
+          // Update ETag for this URL
+          const newEtag = response.headers["etag"];
+          if (newEtag) etagCache.current[url] = newEtag;
+
+          const leaderboardData = response.data;
+          setData(leaderboardData); // immediate UI update
+
+          dataCache.current[url] = leaderboardData;
+
+          // Collect unique page IDs
+          const pageIds = new Set<number>();
+          leaderboardData.entries.forEach((entry) => {
+            pageIds.add(entry.start_id);
+            pageIds.add(entry.end_id);
+          });
+
+          // Fetch page info map
+          if (pageIds.size > 0) {
+            const infoMap = await createPageInfoMap(Array.from(pageIds));
+            setPageInfoMap(infoMap);
+            pageInfoMapCache.current[url] = infoMap;
+          }
+        } else if (response.status === 304) {
+          // No changes, keep existing data
+          console.log("Leaderboard not modified, using cached data");
+          const cachedData = dataCache.current[url];
+          const cachedPageInfoMap = pageInfoMapCache.current[url];
+          if (cachedData) {
+            setData(cachedData);
+            setPageInfoMap(cachedPageInfoMap);
+          } else {
+            console.warn("304 received but no cached data found for", url);
+          }
         }
       } catch (error) {
         console.error("Failed to fetch leaderboard:", error);
@@ -168,18 +209,18 @@ export function Leaderboard({ onSearch }: { onSearch: OnSearchHandler }) {
     };
 
     fetchData();
-  }, [activeLeaderboardTab, offset, itemsPerPage]); // Re-run effect when the tab changes
+  }, [activeLeaderboardTab, offset, itemsPerPage]);
 
   const renderedContent = (
     <div className="space-y-3">
       <div className="flex justify-end">
         <EntriesPerPageSelect value={itemsPerPage} onChange={setItemsPerPage} />
       </div>
-      {isLoading && data.length === 0
+      {isLoading && data.entries.length === 0
         ? Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-[74px] w-full" />
           ))
-        : data.map((entry) => (
+        : data.entries.map((entry) => (
             <LeaderboardRow
               leaderboardType={activeLeaderboardTab}
               key={`${activeLeaderboardTab}-${entry.rank}`}

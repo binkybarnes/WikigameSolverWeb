@@ -89,12 +89,15 @@ const SignInModal = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          <GoogleLogin
-            onSuccess={handleSuccess}
-            onError={handleError}
-            useOneTap
-          />
+        <div className="flex justify-center space-y-4 py-4">
+          <div className="w-full">
+            <GoogleLogin
+              onSuccess={handleSuccess}
+              onError={handleError}
+              type="standard"
+              // useOneTap
+            />
+          </div>
 
           {/* <p className="text-muted-foreground text-center text-xs">
             By signing in, you agree to our Terms of Service and Privacy Policy.

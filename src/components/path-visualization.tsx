@@ -149,11 +149,15 @@ export function PathVisualization({
                   >
                     <div className="hover:bg-muted/30 flex cursor-pointer items-center gap-3 p-3 transition-colors">
                       <div className="bg-muted flex h-16 w-16 flex-shrink-0 items-center justify-center rounded">
-                        <img
-                          src={page.thumbnailUrl || "/vite.svg"}
-                          alt={page.title}
-                          className="h-14 w-14 object-contain"
-                        />
+                        {page.thumbnailUrl ? (
+                          <img
+                            src={page.thumbnailUrl}
+                            alt={page.title}
+                            className="h-14 w-14 rounded-sm object-cover"
+                          />
+                        ) : (
+                          <div className="bg-muted h-14 w-14 rounded-sm" />
+                        )}
                       </div>
 
                       <div className="min-w-0 flex-1">

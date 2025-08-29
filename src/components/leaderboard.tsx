@@ -14,7 +14,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Trophy, Target, TrendingUp, ArrowRight, Merge } from "lucide-react";
+import {
+  Trophy,
+  Target,
+  TrendingUp,
+  ArrowRight,
+  Merge,
+  Image,
+} from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 // Assuming these are defined elsewhere
@@ -80,11 +87,16 @@ const LeaderboardRow = ({
     }
     return (
       <div className="flex w-80 items-center gap-2 truncate">
-        <img
-          src={page.thumbnailUrl || "./vite.svg"}
-          alt={page.title}
-          className="h-18 w-18 rounded-sm object-cover"
-        />
+        {page.thumbnailUrl ? (
+          <img
+            src={page.thumbnailUrl}
+            alt={page.title}
+            className="h-18 w-18 rounded-sm object-cover"
+          />
+        ) : (
+          <div className="bg-muted h-18 w-18 rounded-sm" />
+        )}
+
         <span className="truncate text-sm font-medium">{page.title}</span>
       </div>
     );

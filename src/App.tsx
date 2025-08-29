@@ -25,6 +25,7 @@ import {
   User,
   Merge,
   Github,
+  ArrowRightLeft,
 } from "lucide-react";
 import { FaGithub } from "react-icons/fa";
 
@@ -40,6 +41,7 @@ import { UserDropdown } from "./components/user-dropdown";
 import SignInModal from "./components/sign-in-modal";
 import ChangeUsernameModal from "./components/change-username-modal";
 import axios from "axios";
+import RandomPagesButton from "./components/random-pages-button";
 
 export default function WikipediaPathFinder() {
   const [startPage, setStartPage] = useState("");
@@ -327,8 +329,8 @@ export default function WikipediaPathFinder() {
                 </CardDescription> */}
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
+                <div className="flex gap-4">
+                  <div className="flex-1 space-y-2">
                     <label
                       htmlFor="start-page"
                       className="text-foreground text-lg font-medium"
@@ -343,7 +345,24 @@ export default function WikipediaPathFinder() {
                       className="bg-input border-border focus:ring-primary/20 focus:border-primary mt-2 h-12 text-2xl transition-colors"
                     />
                   </div>
-                  <div className="space-y-2">
+
+                  {/* Swap Button */}
+                  <div className="flex flex-col justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const temp = startPage;
+                        setStartPage(endPage);
+                        setEndPage(temp);
+                        handleSearch();
+                      }}
+                      className="hover:bg-muted flex h-12 w-12 cursor-pointer items-center justify-center rounded p-2 transition-colors"
+                    >
+                      <ArrowRightLeft className="h-8 w-8" />
+                    </button>
+                  </div>
+
+                  <div className="flex-1 space-y-2">
                     <label
                       htmlFor="end-page"
                       className="text-foreground text-lg font-medium"
@@ -360,23 +379,34 @@ export default function WikipediaPathFinder() {
                   </div>
                 </div>
 
-                <Button
-                  onClick={() => handleSearch()}
-                  disabled={!startPage.trim() || !endPage.trim() || isSearching}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground w-full px-6 py-3 text-base font-medium transition-all duration-200 md:w-auto"
-                >
-                  {isSearching ? (
-                    <>
-                      <div className="border-primary-foreground/30 border-t-primary-foreground mr-2 h-4 w-4 animate-spin rounded-full border-2" />
-                      Searching...
-                    </>
-                  ) : (
-                    <>
-                      <Search className="mr-2 h-4 w-4" />
-                      Find Paths
-                    </>
-                  )}
-                </Button>
+                <div className="flex gap-4">
+                  <Button
+                    onClick={() => handleSearch()}
+                    disabled={
+                      !startPage.trim() || !endPage.trim() || isSearching
+                    }
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground w-full px-6 py-3 text-base font-medium transition-all duration-200 md:w-auto"
+                  >
+                    {isSearching ? (
+                      <>
+                        <div className="border-primary-foreground/30 border-t-primary-foreground mr-2 h-4 w-4 animate-spin rounded-full border-2" />
+                        Searching...
+                      </>
+                    ) : (
+                      <>
+                        <Search className="mr-2 h-4 w-4" />
+                        Find Paths
+                      </>
+                    )}
+                  </Button>
+                  {/* Random Button */}
+                  <RandomPagesButton
+                    setStartPage={setStartPage}
+                    setEndPage={setEndPage}
+                    handleSearch={handleSearch}
+                  />
+                </div>
+
                 {error && (
                   <div className="bg-destructive/10 border-destructive/20 rounded-lg border p-4">
                     <div className="text-destructive flex items-center gap-2">

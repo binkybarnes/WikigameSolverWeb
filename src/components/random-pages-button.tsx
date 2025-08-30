@@ -11,6 +11,7 @@ async function fetchRandomPage(): Promise<string> {
       list: "random",
       rnnamespace: "0", // only main/article pages
       rnlimit: "1",
+      _ts: Date.now() + Math.random(), //safari cache buster
     },
   });
   return data.query.random[0].title as string;

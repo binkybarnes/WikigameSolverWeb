@@ -150,7 +150,7 @@ export function Leaderboard({ onSearch }: { onSearch: OnSearchHandler }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
   const offset = (currentPage - 1) * itemsPerPage;
-  const totalPages = data.total / itemsPerPage;
+  const totalPages = Math.ceil(data.total / itemsPerPage);
 
   // const scrollPositions = useRef({ longest: 0, most: 0 });
 

@@ -146,7 +146,6 @@ export default function WikipediaPathFinder() {
         {
           headers: {
             "Content-Type": "application/json",
-            "Accept-Encoding": "gzip, deflate, br",
           },
           withCredentials: true, // same as credentials: "include"
           validateStatus: () => true, // handle status manually

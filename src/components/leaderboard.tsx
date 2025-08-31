@@ -145,11 +145,14 @@ const LeaderboardRow = ({
         className="bg-muted/30 border-border hover:bg-muted/50 hidden cursor-pointer items-center rounded-lg border p-3 lg:flex"
       >
         {/* Left section: Rank and Username */}
-        <div className="flex w-32 items-center gap-3 lg:w-40">
+        <div className="flex items-center gap-3">
           <div className="bg-primary/10 text-primary flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-mono text-sm font-bold">
             {entry.rank + 1}
           </div>
-          <div className="text-muted-foreground truncate text-sm">
+          <div
+            className="text-muted-foreground truncate text-sm"
+            style={{ width: "20ch", display: "inline-block" }}
+          >
             {entry.username}
           </div>
         </div>
@@ -174,10 +177,10 @@ const LeaderboardRow = ({
                     <img
                       src={page.thumbnailUrl}
                       alt={page.title}
-                      className="h-18 w-18 rounded-sm object-cover"
+                      className="h-24 w-24 rounded-sm object-cover"
                     />
                   ) : (
-                    <div className="bg-muted h-18 w-18 rounded-sm" />
+                    <div className="bg-muted h-24 w-24 rounded-sm" />
                   )}
 
                   <span className="truncate text-sm font-medium">

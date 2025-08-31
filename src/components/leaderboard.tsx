@@ -21,6 +21,7 @@ import {
   ArrowRight,
   Merge,
   Image,
+  ArrowDown,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -51,8 +52,6 @@ interface LeaderboardResponse {
 type LeaderboardType = "longest" | "most";
 type OnSearchHandler = (startTitle: string, endTitle: string) => void;
 
-// A new component to render a single leaderboard row
-// It receives the entry data and the page info map as props
 const LeaderboardRow = ({
   entry,
   pageInfoMap,
@@ -86,7 +85,7 @@ const LeaderboardRow = ({
       );
     }
     return (
-      <div className="flex w-80 items-center gap-2 truncate">
+      <div className="flex w-60 items-center gap-2 truncate">
         {page.thumbnailUrl ? (
           <img
             src={page.thumbnailUrl}
@@ -103,37 +102,108 @@ const LeaderboardRow = ({
   };
 
   return (
-    <div
-      onClick={handleClick}
-      className="bg-muted/30 border-border hover:bg-muted/50 flex cursor-pointer items-center rounded-lg border p-3"
-    >
-      {/* Left section: Rank and Username */}
-      <div className="flex w-32 items-center gap-3 md:w-40">
-        <div className="bg-primary/10 text-primary flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-mono text-sm font-bold">
-          {entry.rank + 1}
+    <>
+      {/* --- SMALL WIDTH: current (not commented) layout --- */}
+      <div
+        onClick={handleClick}
+        className="bg-muted/30 border-border hover:bg-muted/50 flex cursor-pointer items-center justify-between rounded-lg border p-3 lg:hidden"
+      >
+        {/* Left section: Rank and Username */}
+        <div className="flex flex-col items-center">
+          <div className="bg-primary/10 text-primary flex h-8 w-8 items-center justify-center rounded-full font-mono text-sm font-bold">
+            {entry.rank + 1}
+          </div>
+          <span className="text-muted-foreground w-full text-xs">
+            {entry.username}
+          </span>
         </div>
-        <div className="text-muted-foreground truncate text-sm">
-          {entry.username}
+
+        {/* Middle section: Path */}
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-2 lg:gap-4">
+          {renderPage(startPage)}
+          {/* <ArrowRight className="text-muted-foreground h-4 w-4 shrink-0" /> */}
+          {renderPage(endPage)}
+        </div>
+
+        {/* Right section: Score */}
+        <div className="w-16 text-right">
+          <div className="text-primary font-mono text-lg font-bold">
+            {entry.score}
+          </div>
+          <div className="text-muted-foreground text-xs">
+            {leaderboardType === "longest" ? "steps" : "paths"}
+          </div>
         </div>
       </div>
 
-      {/* Middle section: Path */}
-      <div className="flex flex-1 items-center justify-center gap-2 px-2 md:gap-4">
-        {renderPage(startPage)}
-        <ArrowRight className="text-muted-foreground h-4 w-4 shrink-0" />
-        {renderPage(endPage)}
-      </div>
+      {/* --- MEDIUM+ WIDTH: previously-commented layout (shown on md+) --- */}
+      <div
+        onClick={handleClick}
+        className="bg-muted/30 border-border hover:bg-muted/50 hidden cursor-pointer items-center rounded-lg border p-3 lg:flex"
+      >
+        {/* Left section: Rank and Username */}
+        <div className="flex w-32 items-center gap-3 lg:w-40">
+          <div className="bg-primary/10 text-primary flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-mono text-sm font-bold">
+            {entry.rank + 1}
+          </div>
+          <div className="text-muted-foreground truncate text-sm">
+            {entry.username}
+          </div>
+        </div>
 
-      {/* Right section: Score */}
-      <div className="ml-auto w-16 text-right">
-        <div className="text-primary font-mono text-lg font-bold">
-          {entry.score}
+        {/* Middle section: Path */}
+        <div className="flex flex-1 items-center justify-center gap-2 px-2 lg:gap-4">
+          {/* renderPage for bigger layout uses larger width in the commented version */}
+          {/* we need a wider render for md+ screens; replicate original commented renderPage here */}
+          {(() => {
+            const renderPageLarge = (page?: PageInfo) => {
+              if (!page) {
+                return (
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-10 w-10 rounded" />
+                    <Skeleton className="h-4 w-24" />
+                  </div>
+                );
+              }
+              return (
+                <div className="flex w-80 items-center gap-2 truncate">
+                  {page.thumbnailUrl ? (
+                    <img
+                      src={page.thumbnailUrl}
+                      alt={page.title}
+                      className="h-18 w-18 rounded-sm object-cover"
+                    />
+                  ) : (
+                    <div className="bg-muted h-18 w-18 rounded-sm" />
+                  )}
+
+                  <span className="truncate text-sm font-medium">
+                    {page.title}
+                  </span>
+                </div>
+              );
+            };
+            return (
+              <>
+                {renderPageLarge(startPage)}
+                <ArrowRight className="text-muted-foreground h-4 w-4 shrink-0" />
+                {renderPageLarge(endPage)}
+              </>
+            );
+          })()}
         </div>
-        <div className="text-muted-foreground text-xs">
-          {leaderboardType === "longest" ? "steps" : "paths"}
+
+        {/* Right section: Score */}
+        <div className="ml-auto w-16 text-right">
+          <div className="text-primary font-mono text-lg font-bold">
+            {entry.score}
+          </div>
+          <div className="text-muted-foreground text-xs">
+            {leaderboardType === "longest" ? "steps" : "paths"}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
@@ -263,7 +333,7 @@ export function Leaderboard({ onSearch }: { onSearch: OnSearchHandler }) {
           }
           className="w-full"
         >
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="flex w-full">
             <TabsTrigger
               value="longest"
               className="flex items-center gap-2 text-lg"

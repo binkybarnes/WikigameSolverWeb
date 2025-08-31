@@ -375,16 +375,16 @@ export function PathVisualization({
     <div className="flex flex-1 flex-col space-y-4">
       <div className="flex items-center justify-between">
         <Tabs value={viewMode} onValueChange={handleViewModeChange}>
-          <TabsList className="grid w-fit grid-cols-3">
-            <TabsTrigger value="grid" className="flex items-center gap-2">
+          <TabsList className="w-fit">
+            <TabsTrigger value="grid" className="flex items-center gap-2 px-4">
               <Grid3X3 className="h-4 w-4" />
               Grid View
             </TabsTrigger>
-            <TabsTrigger value="list" className="flex items-center gap-2">
+            <TabsTrigger value="list" className="flex items-center gap-2 px-4">
               <List className="h-4 w-4" />
               List View
             </TabsTrigger>
-            <TabsTrigger value="graph" className="flex items-center gap-2">
+            <TabsTrigger value="graph" className="flex items-center gap-2 px-4">
               <Network className="h-4 w-4" />
               Graph View
             </TabsTrigger>

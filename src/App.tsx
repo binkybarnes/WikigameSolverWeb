@@ -257,17 +257,17 @@ export default function WikipediaPathFinder() {
     <div className="bg-background text-foreground min-h-screen">
       {/* Header */}
       <header className="border-border bg-card/50 border-b backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4">
+        <div className="container mx-auto py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="bg-primary flex h-8 w-8 items-center justify-center rounded-md">
+              <div className="bg-primary flex h-8 w-8 shrink-0 items-center justify-center rounded-md">
                 <Globe className="text-primary-foreground h-4 w-4" />
               </div>
               <div>
                 <h1 className="text-foreground font-mono text-xl font-bold tracking-tight">
                   Wikipedia Paths Finder
                 </h1>
-                <p className="text-muted-foreground text-base">
+                <p className="text-muted-foreground hidden text-base md:block">
                   Discover all shortest paths between any two Wikipedia articles
                 </p>
               </div>
@@ -295,9 +295,9 @@ export default function WikipediaPathFinder() {
         </div>
       </header>
 
-      <main className="max-w-8xl container mx-auto px-4 py-8">
+      <main className="container mx-auto py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="mb-8 grid w-full grid-cols-2">
+          <TabsList className="mb-8 flex w-full">
             <TabsTrigger
               value="finder"
               className="flex items-center gap-2 text-base"
@@ -319,7 +319,7 @@ export default function WikipediaPathFinder() {
             <Card className="shadow-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 font-mono text-2xl">
-                  <Cable className="text-primary h-6 w-6" />
+                  <Cable className="text-primary h-6 w-6 shrink-0" />
                   Find the shortest paths between...
                 </CardTitle>
                 {/* <CardDescription className="text-foreground text-base">
@@ -328,14 +328,8 @@ export default function WikipediaPathFinder() {
                 </CardDescription> */}
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="flex gap-4">
-                  <div className="flex-1 space-y-2">
-                    <label
-                      htmlFor="start-page"
-                      className="text-foreground text-lg font-medium"
-                    >
-                      Start Page
-                    </label>
+                <div className="flex flex-col items-center gap-4 md:flex-row">
+                  <div className="w-full flex-1 space-y-2">
                     <WikipediaAutocomplete
                       id="start-page"
                       placeholder="e.g., Italian brainrot"
@@ -346,7 +340,7 @@ export default function WikipediaPathFinder() {
                   </div>
 
                   {/* Swap Button */}
-                  <div className="flex flex-col justify-end">
+                  <div className="hidden md:block">
                     <button
                       type="button"
                       onClick={() => {
@@ -361,13 +355,7 @@ export default function WikipediaPathFinder() {
                     </button>
                   </div>
 
-                  <div className="flex-1 space-y-2">
-                    <label
-                      htmlFor="end-page"
-                      className="text-foreground text-lg font-medium"
-                    >
-                      End Page
-                    </label>
+                  <div className="w-full flex-1 space-y-2">
                     <WikipediaAutocomplete
                       id="end-page"
                       placeholder="e.g., Fast inverse square root"
@@ -384,7 +372,7 @@ export default function WikipediaPathFinder() {
                     disabled={
                       !startPage.trim() || !endPage.trim() || isSearching
                     }
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground w-full px-6 py-3 text-base font-medium transition-all duration-200 md:w-auto"
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground flex-1 px-6 py-3 text-base font-medium transition-all duration-200 md:flex-none"
                   >
                     {isSearching ? (
                       <>
@@ -398,6 +386,19 @@ export default function WikipediaPathFinder() {
                       </>
                     )}
                   </Button>
+
+                  <Button
+                    onClick={() => {
+                      const temp = startPage;
+                      setStartPage(endPage);
+                      setEndPage(temp);
+                      handleSearch();
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 text-base md:hidden"
+                  >
+                    <ArrowRightLeft className="h-8 w-8" />
+                  </Button>
+
                   {/* Random Button */}
                   <RandomPagesButton
                     setStartPage={setStartPage}
@@ -429,7 +430,7 @@ export default function WikipediaPathFinder() {
                 <CardContent className="">
                   <div className="flex items-center justify-center gap-8 text-center">
                     <div className="flex items-center gap-3">
-                      <div className="bg-primary/10 flex h-12 w-12 items-center justify-center rounded-full">
+                      <div className="bg-primary/10 hidden h-12 w-12 items-center justify-center rounded-full md:flex">
                         <ArrowRight className="text-primary h-6 w-6" />
                       </div>
                       <div>
@@ -445,7 +446,7 @@ export default function WikipediaPathFinder() {
                     <div className="bg-border h-16 w-px" />
 
                     <div className="flex items-center gap-3">
-                      <div className="bg-primary/10 flex h-12 w-12 items-center justify-center rounded-full">
+                      <div className="bg-primary/10 hidden h-12 w-12 items-center justify-center rounded-full md:flex">
                         <Merge className="text-primary h-6 w-6" />
                       </div>
                       <div>
@@ -461,7 +462,7 @@ export default function WikipediaPathFinder() {
                     <div className="bg-border h-16 w-px" />
 
                     <div className="flex items-center gap-3">
-                      <div className="bg-primary/10 flex h-12 w-12 items-center justify-center rounded-full">
+                      <div className="bg-primary/10 hidden h-12 w-12 items-center justify-center rounded-full md:flex">
                         <Clock className="text-primary h-6 w-6" />
                       </div>
                       <div>

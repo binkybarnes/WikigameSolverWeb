@@ -40,7 +40,7 @@ export default function RandomPagesButton({
       className="flex items-center gap-2 px-4 py-2 text-base"
     >
       <Dice6 className="h-4 w-4" />
-      Random
+      <span className="hidden md:block">Random</span>
     </Button>
   );
 }

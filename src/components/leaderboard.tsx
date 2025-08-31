@@ -109,11 +109,14 @@ const LeaderboardRow = ({
         className="bg-muted/30 border-border hover:bg-muted/50 flex cursor-pointer items-center justify-between rounded-lg border p-3 lg:hidden"
       >
         {/* Left section: Rank and Username */}
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col">
           <div className="bg-primary/10 text-primary flex h-8 w-8 items-center justify-center rounded-full font-mono text-sm font-bold">
             {entry.rank + 1}
           </div>
-          <span className="text-muted-foreground w-full text-xs">
+          <span
+            className="text-muted-foreground truncate text-xs"
+            style={{ width: "20ch", display: "inline-block" }}
+          >
             {entry.username}
           </span>
         </div>

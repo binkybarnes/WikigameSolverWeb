@@ -344,10 +344,10 @@ export default function WikipediaPathFinder() {
                     <button
                       type="button"
                       onClick={() => {
+                        handleSearch(endPage, startPage);
                         const temp = startPage;
                         setStartPage(endPage);
                         setEndPage(temp);
-                        handleSearch();
                       }}
                       className="hover:bg-muted flex h-12 w-12 cursor-pointer items-center justify-center rounded p-2 transition-colors"
                     >

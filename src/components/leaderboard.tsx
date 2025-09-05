@@ -65,6 +65,8 @@ const LeaderboardRow = ({
 }) => {
   const startPage = pageInfoMap[entry.start_id];
   const endPage = pageInfoMap[entry.end_id];
+  console.log(startPage);
+  console.log(endPage);
 
   const handleClick = () => {
     // Only fire the search if we have the page titles
@@ -106,19 +108,25 @@ const LeaderboardRow = ({
       {/* --- SMALL WIDTH: current (not commented) layout --- */}
       <div
         onClick={handleClick}
-        className="bg-muted/30 border-border hover:bg-muted/50 flex cursor-pointer items-center justify-between rounded-lg border p-3 lg:hidden"
+        className="bg-muted/30 border-border hover:bg-muted/50 flex cursor-pointer flex-col items-center justify-between rounded-lg border p-3 lg:hidden"
       >
         {/* Left section: Rank and Username */}
-        <div className="flex flex-col">
+        <div className="flex w-full items-center gap-4">
           <div className="bg-primary/10 text-primary flex h-8 w-8 items-center justify-center rounded-full font-mono text-sm font-bold">
             {entry.rank + 1}
           </div>
-          <span
-            className="text-muted-foreground truncate text-xs"
-            style={{ width: "20ch", display: "inline-block" }}
-          >
+          <span className="text-muted-foreground flex-1 truncate text-xs">
             {entry.username}
           </span>
+          {/* Right section: Score */}
+          <div className="w-16 text-right">
+            <div className="text-primary font-mono text-lg font-bold">
+              {entry.score}
+            </div>
+            <div className="text-muted-foreground text-xs">
+              {leaderboardType === "longest" ? "steps" : "paths"}
+            </div>
+          </div>
         </div>
 
         {/* Middle section: Path */}
@@ -126,16 +134,6 @@ const LeaderboardRow = ({
           {renderPage(startPage)}
           {/* <ArrowRight className="text-muted-foreground h-4 w-4 shrink-0" /> */}
           {renderPage(endPage)}
-        </div>
-
-        {/* Right section: Score */}
-        <div className="w-16 text-right">
-          <div className="text-primary font-mono text-lg font-bold">
-            {entry.score}
-          </div>
-          <div className="text-muted-foreground text-xs">
-            {leaderboardType === "longest" ? "steps" : "paths"}
-          </div>
         </div>
       </div>
 
@@ -149,10 +147,7 @@ const LeaderboardRow = ({
           <div className="bg-primary/10 text-primary flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-mono text-sm font-bold">
             {entry.rank + 1}
           </div>
-          <div
-            className="text-muted-foreground truncate text-sm"
-            style={{ width: "20ch", display: "inline-block" }}
-          >
+          <div className="text-muted-foreground w-[20ch] truncate text-sm">
             {entry.username}
           </div>
         </div>
@@ -172,7 +167,7 @@ const LeaderboardRow = ({
                 );
               }
               return (
-                <div className="flex w-80 items-center gap-2 truncate">
+                <div className="flex flex-1 items-center gap-2 truncate">
                   {page.thumbnailUrl ? (
                     <img
                       src={page.thumbnailUrl}

@@ -38,11 +38,9 @@ const SignInModal = ({
     if (idToken) {
       try {
         // Send this token to your Axum backend
-        await axios.post(
+        const { data: authResponse } = await axios.post(
           `${API_URL}/auth/google`,
-          {
-            token: idToken,
-          },
+          { token: idToken },
           { withCredentials: true },
         );
 
@@ -55,11 +53,11 @@ const SignInModal = ({
         setIsOpen(false);
         setUser(userProfile);
 
-        // Prompt change username if still a guest username
-        if (userProfile.username.startsWith("Guest")) {
+        // if first time sign in prompt change username
+        if (authResponse.first_time) {
           setTimeout(() => {
             setIsChangeUsernameModalOpen(true);
-          }, 300); // small delay to let UI settle
+          }, 300);
         }
       } catch (error) {
         console.error("Error sending token to backend:", error);

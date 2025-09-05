@@ -32,7 +32,10 @@ import { FaGithub } from "react-icons/fa";
 import { Maximize, Minimize } from "lucide-react";
 
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Leaderboard } from "@/components/leaderboard";
+import {
+  Leaderboard,
+  type LeaderboardResponse,
+} from "@/components/leaderboard";
 import { PathVisualization } from "@/components/path-visualization";
 import { WikipediaAutocomplete } from "@/components/wikipedia-autocomplete";
 import { createPageInfoMap, type PageInfoMap } from "./lib/fetch-descriptions";
@@ -196,6 +199,12 @@ export default function WikipediaPathFinder() {
       setIsSearching(false);
     }
   };
+
+  const [leaderboardCaches] = useState({
+    dataCache: {} as Record<string, LeaderboardResponse>,
+    pageInfoMapCache: {} as Record<string, PageInfoMap>,
+    etagCache: {} as Record<string, string>,
+  });
 
   const handleLeaderboardSearch = (startTitle: string, endTitle: string) => {
     // 1. Switch to the finder tab
@@ -531,7 +540,10 @@ export default function WikipediaPathFinder() {
           </TabsContent>
 
           <TabsContent value="leaderboard">
-            <Leaderboard onSearch={handleLeaderboardSearch} />
+            <Leaderboard
+              onSearch={handleLeaderboardSearch}
+              caches={leaderboardCaches}
+            />
           </TabsContent>
         </Tabs>
       </main>

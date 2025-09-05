@@ -616,18 +616,31 @@ export function ForceGraph({
       return null;
     };
 
+    // const zoom = d3
+    //   .zoom<HTMLCanvasElement, unknown>()
+    //   .scaleExtent([0.005, 4])
+    //   .filter((event) => {
+    //     const e = (event as any).sourceEvent || event;
+    //     // only allow wheel or mousedown when NOT clicking a subject node
+    //     return (
+    //       e.type === "wheel" || (e.type === "mousedown" && !findSubjectNode(e))
+    //     );
+    //   })
+    //   .on("zoom", (event) => {
+    //     // currentTransform = event.transform;
+    //     drawGraph();
+    //   });
     const zoom = d3
       .zoom<HTMLCanvasElement, unknown>()
       .scaleExtent([0.005, 4])
       .filter((event) => {
         const e = (event as any).sourceEvent || event;
-        // only allow wheel or mousedown when NOT clicking a subject node
-        return (
-          e.type === "wheel" || (e.type === "mousedown" && !findSubjectNode(e))
-        );
+        // Allow wheel events for zooming.
+        // For all other events (mousedown, touchstart), only allow them to
+        // trigger a pan if they are NOT on a draggable node.
+        return e.type === "wheel" || !findSubjectNode(e);
       })
       .on("zoom", (event) => {
-        // currentTransform = event.transform;
         drawGraph();
       });
     d3.select(canvas).call(zoom);

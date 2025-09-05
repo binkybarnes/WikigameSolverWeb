@@ -44,7 +44,7 @@ interface LeaderboardEntry {
   rank: number;
 }
 
-interface LeaderboardResponse {
+export interface LeaderboardResponse {
   entries: LeaderboardEntry[];
   total: number; // total number of entries in this leaderboard
 }
@@ -208,7 +208,17 @@ const LeaderboardRow = ({
   );
 };
 
-export function Leaderboard({ onSearch }: { onSearch: OnSearchHandler }) {
+export function Leaderboard({
+  onSearch,
+  caches,
+}: {
+  onSearch: OnSearchHandler;
+  caches: {
+    dataCache: Record<string, LeaderboardResponse>;
+    pageInfoMapCache: Record<string, PageInfoMap>;
+    etagCache: Record<string, string>;
+  };
+}) {
   const [activeLeaderboardTab, setActiveLeaderboardTab] =
     useState<LeaderboardType>("longest");
   const [data, setData] = useState<LeaderboardResponse>({
@@ -225,9 +235,9 @@ export function Leaderboard({ onSearch }: { onSearch: OnSearchHandler }) {
 
   // const scrollPositions = useRef({ longest: 0, most: 0 });
 
-  const dataCache = useRef<Record<string, LeaderboardResponse>>({});
-  const pageInfoMapCache = useRef<Record<string, PageInfoMap>>({});
-  const etagCache = useRef<Record<string, string>>({});
+  const dataCache = caches.dataCache;
+  const pageInfoMapCache = caches.pageInfoMapCache;
+  const etagCache = caches.etagCache;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -239,8 +249,8 @@ export function Leaderboard({ onSearch }: { onSearch: OnSearchHandler }) {
 
         // Prepare headers
         const headers: Record<string, string> = {};
-        if (etagCache.current[url]) {
-          headers["If-None-Match"] = etagCache.current[url];
+        if (etagCache[url]) {
+          headers["If-None-Match"] = etagCache[url];
         }
 
         // Fetch leaderboard data
@@ -252,12 +262,12 @@ export function Leaderboard({ onSearch }: { onSearch: OnSearchHandler }) {
         if (response.status === 200) {
           // Update ETag for this URL
           const newEtag = response.headers["etag"];
-          if (newEtag) etagCache.current[url] = newEtag;
+          if (newEtag) etagCache[url] = newEtag;
 
           const leaderboardData = response.data;
           setData(leaderboardData); // immediate UI update
 
-          dataCache.current[url] = leaderboardData;
+          dataCache[url] = leaderboardData;
 
           // Collect unique page IDs
           const pageIds = new Set<number>();
@@ -270,13 +280,13 @@ export function Leaderboard({ onSearch }: { onSearch: OnSearchHandler }) {
           if (pageIds.size > 0) {
             const infoMap = await createPageInfoMap(Array.from(pageIds));
             setPageInfoMap(infoMap);
-            pageInfoMapCache.current[url] = infoMap;
+            pageInfoMapCache[url] = infoMap;
           }
         } else if (response.status === 304) {
           // No changes, keep existing data
           console.log("Leaderboard not modified, using cached data");
-          const cachedData = dataCache.current[url];
-          const cachedPageInfoMap = pageInfoMapCache.current[url];
+          const cachedData = dataCache[url];
+          const cachedPageInfoMap = pageInfoMapCache[url];
           if (cachedData) {
             setData(cachedData);
             setPageInfoMap(cachedPageInfoMap);
@@ -292,7 +302,14 @@ export function Leaderboard({ onSearch }: { onSearch: OnSearchHandler }) {
     };
 
     fetchData();
-  }, [activeLeaderboardTab, offset, itemsPerPage]);
+  }, [
+    activeLeaderboardTab,
+    offset,
+    itemsPerPage,
+    dataCache,
+    etagCache,
+    pageInfoMapCache,
+  ]);
 
   const renderedContent = (
     <div className="space-y-3">
